@@ -1,0 +1,125 @@
+/* import fonts - Switched to Inter for a more premium UI feel */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+:root {
+  --bg-dark: #121212;      /* Main background */
+  --bg-card: #1e1e1e;      /* Slightly lighter for contrast */
+  --accent-red: #ff3e3e;   /* Vibrant primary red */
+  --hover-red: #d32f2f;    /* Darker red for hover states */
+  --text-main: #ffffff;    /* Pure white for headings */
+  --text-sub: #b3b3b3;     /* Muted gray for secondary text */
+  --border-color: #333333;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  min-width: 350px;
+  padding: 20px;
+  border-radius: 12px; /* Extensions usually clip body borders, but good for testing */
+}
+
+h3 {
+  font-weight: 700;
+  font-size: 1.4rem;
+  margin-bottom: 15px;
+  letter-spacing: -0.5px;
+}
+
+h4 {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-main);
+}
+
+/* List Styling */
+ul {
+  list-style-type: none;
+  margin-top: 15px;
+}
+
+li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-card);
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s ease;
+}
+
+li:hover {
+  border-color: var(--accent-red);
+}
+
+/* Form & Inputs */
+.addSiteForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: white;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+input:focus {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 2px rgba(255, 62, 62, 0.2);
+}
+
+/* Primary Button */
+button {
+  background-color: var(--accent-red);
+  color: white;
+  padding: 12px 20px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background-color: var(--hover-red);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+/* Secondary/Remove Button */
+#removeSite {
+  background-color: transparent;
+  color: var(--text-sub);
+  border: 1px solid var(--border-color);
+  width: auto;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+#removeSite:hover {
+  background-color: #f44336;
+  color: white;
+  border-color: #f44336;
+}

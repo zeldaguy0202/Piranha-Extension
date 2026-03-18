@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Website Blocker",
+  "description": "Blocks specified websites.",
+  "version": "1.0",
+  "host_permissions": ["*://*/*"],
+  "permissions": ["storage", "tabs"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "Piranha_Extension_Logo.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
