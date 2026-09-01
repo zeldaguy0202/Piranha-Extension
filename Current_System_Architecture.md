@@ -19,7 +19,7 @@
   
       %% Database Layer
       subgraph Data ["Database Layer"]
-          DB[(PostgreSQL Database<br/>Supabase / GCP Cloud SQL)]
+          DB[(PostgreSQL Database<br/>Supabase)]
           ORM <-->|"SQL Queries / Connection"| DB
       end
   
