@@ -1,11 +1,22 @@
+import os
+
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# Replace [PASSWORD] with your actual Supabase password
-DATABASE_URL = "postgresql://postgres:yLdXx9Ph7YV%3FSKk@db.rggebvhkehryjwvjmwbj.supabase.co:5432/postgres"
+# Chrome extension popups send requests from a chrome-extension:// origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
+# Set DATABASE_URL in the environment instead of committing real credentials.
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 
 # Initialize Database Engine
@@ -48,6 +59,24 @@ async def submit_report(payload: ReportRequest):
             connection.commit()
 
         return {"status": "success", "message": "Report saved to Supabase backend successfully!"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/blocked-sites")
+async def get_blocked_sites():
+    try:
+        with engine.connect() as connection:
+            query = text("""
+                SELECT DISTINCT malicious_url
+                FROM url_reports
+                WHERE status = 'approved';
+            """)
+            result = connection.execute(query)
+            sites = [row[0] for row in result.fetchall()]
+
+        return {"sites": sites}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
