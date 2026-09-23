@@ -27,3 +27,6 @@ src/manifest.d.ts
 *.njsproj
 *.sln
 *.sw?
+
+__pycache__/
+*.py[cod]
