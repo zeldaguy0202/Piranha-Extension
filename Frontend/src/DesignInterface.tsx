@@ -4,6 +4,7 @@ import logo from "../ChatGPT Image Sep 2, 2026 at 07_04_27 PM.png";
 import { normalizeHost } from "./lib/normalizeHost";
 
 const REPORT_API_URL = "http://127.0.0.1:8000/api/report";
+const BLOCKED_SITES_API_URL = "http://127.0.0.1:8000/api/blocked-sites";
 
 export default function PiranhaPopup() {
   const [blockedSites, setBlockedSites] = useState<string[]>([]);
@@ -25,6 +26,17 @@ export default function PiranhaPopup() {
       setBlockedSites(data.blockedSites || []);
       setCommunityBlockedSites(data.communityBlockedSites || []);
     });
+
+    fetch(BLOCKED_SITES_API_URL)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { sites?: string[] } | null) => {
+        if (!data) return;
+        const hostnames = Array.from(
+          new Set((data.sites || []).map(normalizeHost).filter(Boolean))
+        );
+        chrome.storage.sync.set({ communityBlockedSites: hostnames });
+      })
+      .catch(() => undefined);
 
     const onChanged = (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -266,7 +278,8 @@ export default function PiranhaPopup() {
             <CheckCircle2 className="success-icon" size={40} />
             <h3 className="section-title">Thank you for your report!</h3>
             <p className="section-subtitle">
-              Your report has been submitted to the Piranha community.
+              We will notify you at a later date if the site is approved for
+              our list.
             </p>
             <button type="button" onClick={resetForm}>
               Submit Another Report

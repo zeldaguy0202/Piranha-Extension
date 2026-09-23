@@ -13,17 +13,18 @@ To set up the backend of the extension, perform the following steps:
 	```powershell
 	cd Backend
 	```
-4. Set your Supabase database connection URL in the terminal. Replace the placeholder values with your actual connection information:
+4. Set your Supabase database connection URL and your VirusTotal API key in the terminal. Replace the placeholder values with your actual information:
 	```powershell
 	$env:DATABASE_URL = "postgresql://postgres:YOUR_PASSWORD@YOUR_HOST:5432/postgres"
+	$env:VIRUSTOTAL_API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
 	```
 5. Install the required Python packages and run the backend:
 	```powershell
-	python -m pip install fastapi uvicorn sqlalchemy psycopg2-binary pydantic[email]
+	python -m pip install -r requirements.txt
 	python -m uvicorn piranha_backend_:app --reload
 	```
 6. After running the command, click the local address that is created and add `/docs` at the end. For example: `http://127.0.0.1:8000/docs`.
-7. You are now ready to test the backend. The `/api/report` route accepts website reports, and `/api/blocked-sites` returns approved community reports for the extension.
+7. You are now ready to test the backend. The `/api/report` route checks each submitted URL against VirusTotal and only stores it if at least one vendor flags it as malicious; `/api/blocked-sites` returns approved community reports for the extension.
 //
 
 #Setting up/Testing the Frontend
