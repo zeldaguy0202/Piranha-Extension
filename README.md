@@ -4,6 +4,7 @@ This project was developed by seniors in the computer science department at Tenn
 Below you will find the appropriate steps to begin running the extension and its backend locally on your computer.
 
 #Setting up/Testing the Backend
+
 //
 To set up the backend of the extension, perform the following steps:
 1. Download or clone this repository to a local directory on your computer.
@@ -26,6 +27,7 @@ To set up the backend of the extension, perform the following steps:
 //
 
 #Setting up/Testing the Frontend
+
 //
 To set up the extension in your Chrome browser, perform the following steps:
 1. Open a second terminal in VSCode and change into the `Frontend` folder:
@@ -51,13 +53,18 @@ After changing frontend source files, run `npm run build` again and click the re
 //
 Since this is a full stack project, there are a few different interconnected parts which flow into each other. Additionally, it's helpful to have links to tools, resources, and documentation for development. Below are some great resources if you need help.
 
+
 Frontend:
 Chrome Extensions Docs: https://developer.chrome.com/docs/extensions
 
+
 Backend:
 FastAPI Documentation: https://fastapi.tiangolo.com/
+
 SQLAlchemy Documentation: https://docs.sqlalchemy.org/en/20/
+
 Pydantic Documentation: https://docs.pydantic.dev/
+
 
 Database:
 Supabase (PostgreSQL Database): https://supabase.com/docs
