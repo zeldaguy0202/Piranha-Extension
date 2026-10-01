@@ -26,7 +26,7 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 # Initialize Database Engine
 engine = create_engine(DATABASE_URL)
 
-# VirusTotal API key must stay server-side; never expose it to the extension.
+# VirusTotal API key must stay server-side; We should never expose it to the extension.
 VIRUSTOTAL_API_KEY = os.environ["VIRUSTOTAL_API_KEY"]
 VIRUSTOTAL_BASE_URL = "https://www.virustotal.com/api/v3"
 VIRUSTOTAL_POLL_TIMEOUT_SECONDS = 60

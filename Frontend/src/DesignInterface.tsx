@@ -6,7 +6,16 @@ import { normalizeHost } from "./lib/normalizeHost";
 const REPORT_API_URL = "http://127.0.0.1:8000/api/report";
 const BLOCKED_SITES_API_URL = "http://127.0.0.1:8000/api/blocked-sites";
 
+type TabKey = "local" | "community" | "report";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "local", label: "Local" },
+  { key: "community", label: "Community" },
+  { key: "report", label: "Report" },
+];
+
 export default function PiranhaPopup() {
+  const [activeTab, setActiveTab] = useState<TabKey>("report");
   const [blockedSites, setBlockedSites] = useState<string[]>([]);
   const [communityBlockedSites, setCommunityBlockedSites] = useState<string[]>([]);
   const [siteInput, setSiteInput] = useState("");
@@ -148,6 +157,22 @@ export default function PiranhaPopup() {
     <div className="popup">
       <img src={logo} className="logo" alt="Piranha logo" />
 
+      <div className="tab-bar" role="group" aria-label="Popup sections">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className="tab-button"
+            aria-pressed={activeTab === tab.key}
+            data-active={activeTab === tab.key}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "local" && (
       <section className="card">
         <h3 className="section-title">Blocked Websites</h3>
 
@@ -185,7 +210,9 @@ export default function PiranhaPopup() {
           {blockError && <p className="error-text">{blockError}</p>}
         </div>
       </section>
+      )}
 
+      {activeTab === "community" && (
       <section className="card">
         <h3 className="section-title">Community Reported Sites</h3>
         <p className="section-subtitle">
@@ -203,7 +230,9 @@ export default function PiranhaPopup() {
           ))}
         </ul>
       </section>
+      )}
 
+      {activeTab === "report" && (
       <section className="card">
         {!submitted ? (
           <>
@@ -287,6 +316,7 @@ export default function PiranhaPopup() {
           </div>
         )}
       </section>
+      )}
 
       <p className="privacy-note">
         🔒 Your information is handled securely and used only to improve
