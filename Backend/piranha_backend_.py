@@ -11,13 +11,24 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# Chrome extension popups send requests from a chrome-extension:// origin.
+# Chrome extension requests come from chrome-extension://<extension-id>.
+# Set CORS_ORIGINS to a comma-separated list, e.g. chrome-extension://abcd...
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 # Set DATABASE_URL in the environment instead of committing real credentials.
 DATABASE_URL = os.environ["DATABASE_URL"]

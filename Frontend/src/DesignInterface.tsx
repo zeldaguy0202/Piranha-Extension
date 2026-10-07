@@ -2,23 +2,25 @@ import React, { useEffect, useState } from "react";
 import { Send, CheckCircle2 } from "lucide-react";
 import logo from "../ChatGPT Image Sep 2, 2026 at 07_04_27 PM.png";
 import { normalizeHost } from "./lib/normalizeHost";
+import { API_BASE_URL } from "./config";
 
-const REPORT_API_URL = "http://127.0.0.1:8000/api/report";
-const BLOCKED_SITES_API_URL = "http://127.0.0.1:8000/api/blocked-sites";
+const REPORT_API_URL = `${API_BASE_URL}/api/report`;
+const BLOCKED_SITES_API_URL = `${API_BASE_URL}/api/blocked-sites`;
 
-type TabKey = "local" | "community" | "report";
+type TabKey = "blocklist" | "report";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "local", label: "Local" },
-  { key: "community", label: "Community" },
+  { key: "blocklist", label: "Blocked Sites" },
   { key: "report", label: "Report" },
 ];
 
 export default function PiranhaPopup() {
-  const [activeTab, setActiveTab] = useState<TabKey>("report");
+  const [activeTab, setActiveTab] = useState<TabKey>("blocklist");
   const [blockedSites, setBlockedSites] = useState<string[]>([]);
   const [communityBlockedSites, setCommunityBlockedSites] = useState<string[]>([]);
+  const [ignoredCommunitySites, setIgnoredCommunitySites] = useState<string[]>([]);
   const [siteInput, setSiteInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [blockError, setBlockError] = useState("");
 
   const [name, setName] = useState("");
@@ -30,11 +32,25 @@ export default function PiranhaPopup() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
+  const effectiveBlockedSites = Array.from(
+    new Set([
+      ...blockedSites,
+      ...communityBlockedSites.filter((site) => !ignoredCommunitySites.includes(site)),
+    ])
+  );
+  const filteredBlockedSites = effectiveBlockedSites.filter((site) =>
+    site.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
   useEffect(() => {
-    chrome.storage.sync.get(["blockedSites", "communityBlockedSites"], (data) => {
+    chrome.storage.sync.get(
+      ["blockedSites", "communityBlockedSites", "ignoredCommunitySites"],
+      (data) => {
       setBlockedSites(data.blockedSites || []);
       setCommunityBlockedSites(data.communityBlockedSites || []);
-    });
+      setIgnoredCommunitySites(data.ignoredCommunitySites || []);
+      }
+    );
 
     fetch(BLOCKED_SITES_API_URL)
       .then((response) => (response.ok ? response.json() : null))
@@ -58,6 +74,9 @@ export default function PiranhaPopup() {
       if (changes.communityBlockedSites) {
         setCommunityBlockedSites((changes.communityBlockedSites.newValue as string[]) || []);
       }
+      if (changes.ignoredCommunitySites) {
+        setIgnoredCommunitySites((changes.ignoredCommunitySites.newValue as string[]) || []);
+      }
     };
     chrome.storage.onChanged.addListener(onChanged);
     return () => chrome.storage.onChanged.removeListener(onChanged);
@@ -69,18 +88,31 @@ export default function PiranhaPopup() {
       setBlockError("Enter a valid site to block.");
       return;
     }
-    chrome.storage.sync.get("blockedSites", (data) => {
+    chrome.storage.sync.get(
+      ["blockedSites", "communityBlockedSites", "ignoredCommunitySites"],
+      (data) => {
       const sites: string[] = data.blockedSites || [];
-      if (sites.includes(host)) {
+      const communitySites: string[] = data.communityBlockedSites || [];
+      const ignoredSites: string[] = data.ignoredCommunitySites || [];
+      const alreadyBlocked =
+        (sites.includes(host) || communitySites.includes(host)) &&
+        !ignoredSites.includes(host);
+      if (alreadyBlocked) {
         setBlockError(`${host} is already blocked.`);
         return;
       }
-      const updated = [...sites, host];
-      chrome.storage.sync.set({ blockedSites: updated }, () => {
-        setBlockedSites(updated);
+      const updatedSites = sites.includes(host) ? sites : [...sites, host];
+      const updatedIgnoredSites = ignoredSites.filter((site) => site !== host);
+      chrome.storage.sync.set(
+        { blockedSites: updatedSites, ignoredCommunitySites: updatedIgnoredSites },
+        () => {
+        setBlockedSites(updatedSites);
+        setIgnoredCommunitySites(updatedIgnoredSites);
         setBlockError("");
-      });
-    });
+        }
+      );
+      }
+    );
   };
 
   const handleAddSite = () => {
@@ -100,10 +132,17 @@ export default function PiranhaPopup() {
   };
 
   const removeSite = (site: string) => {
-    const updated = blockedSites.filter((s) => s !== site);
-    chrome.storage.sync.set({ blockedSites: updated }, () => {
-      setBlockedSites(updated);
-    });
+    const updatedSites = blockedSites.filter((entry) => entry !== site);
+    const updatedIgnoredSites = communityBlockedSites.includes(site)
+      ? Array.from(new Set([...ignoredCommunitySites, site]))
+      : ignoredCommunitySites;
+    chrome.storage.sync.set(
+      { blockedSites: updatedSites, ignoredCommunitySites: updatedIgnoredSites },
+      () => {
+        setBlockedSites(updatedSites);
+        setIgnoredCommunitySites(updatedIgnoredSites);
+      }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -172,15 +211,27 @@ export default function PiranhaPopup() {
         ))}
       </div>
 
-      {activeTab === "local" && (
+      {activeTab === "blocklist" && (
       <section className="card">
         <h3 className="section-title">Blocked Websites</h3>
 
+        <input
+          type="search"
+          className="blocklist-search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search blocked sites"
+          aria-label="Search blocked sites"
+        />
+
         <ul className="blocked-list">
-          {blockedSites.length === 0 && (
+          {effectiveBlockedSites.length === 0 && (
             <li className="blocked-empty">No sites blocked yet.</li>
           )}
-          {blockedSites.map((site) => (
+          {effectiveBlockedSites.length > 0 && filteredBlockedSites.length === 0 && (
+            <li className="blocked-empty">No matching sites found.</li>
+          )}
+          {filteredBlockedSites.map((site) => (
             <li key={site} className="blocked-item">
               <span>{site}</span>
               <button
@@ -209,26 +260,6 @@ export default function PiranhaPopup() {
           </button>
           {blockError && <p className="error-text">{blockError}</p>}
         </div>
-      </section>
-      )}
-
-      {activeTab === "community" && (
-      <section className="card">
-        <h3 className="section-title">Community Reported Sites</h3>
-        <p className="section-subtitle">
-          Synced automatically from approved community reports.
-        </p>
-
-        <ul className="blocked-list">
-          {communityBlockedSites.length === 0 && (
-            <li className="blocked-empty">No community sites synced yet.</li>
-          )}
-          {communityBlockedSites.map((site) => (
-            <li key={site} className="blocked-item">
-              <span>{site}</span>
-            </li>
-          ))}
-        </ul>
       </section>
       )}
 

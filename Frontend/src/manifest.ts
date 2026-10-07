@@ -1,4 +1,5 @@
 import { defineManifest } from "@crxjs/vite-plugin";
+import { API_BASE_URL } from "./config";
 
 export default defineManifest({
   manifest_version: 3,
@@ -6,7 +7,7 @@ export default defineManifest({
   description: "Blocks and reports unsafe websites.",
   version: "1.0.0",
   permissions: ["storage", "tabs", "alarms"],
-  host_permissions: ["*://*/*", "http://127.0.0.1:8000/*"],
+  host_permissions: ["*://*/*", `${API_BASE_URL}/*`],
   background: {
     service_worker: "src/background.ts",
     type: "module",

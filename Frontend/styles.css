@@ -105,6 +105,10 @@ body {
   margin-bottom: 10px;
 }
 
+.blocklist-search {
+  margin-bottom: 10px;
+}
+
 .blocked-empty {
   color: var(--text-sub);
   font-size: 0.85rem;

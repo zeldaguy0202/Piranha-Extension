@@ -1,6 +1,7 @@
 import { normalizeHost } from "./lib/normalizeHost";
+import { API_BASE_URL } from "./config";
 
-const BLOCKED_SITES_API_URL = "http://127.0.0.1:8000/api/blocked-sites";
+const BLOCKED_SITES_API_URL = `${API_BASE_URL}/api/blocked-sites`;
 const SYNC_ALARM_NAME = "piranha-community-sync";
 const SYNC_INTERVAL_MINUTES = 5;
 
