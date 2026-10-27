@@ -30,3 +30,6 @@ src/manifest.d.ts
 
 __pycache__/
 *.py[cod]
+
+# Extension signing keys must never be committed
+*.pem

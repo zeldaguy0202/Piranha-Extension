@@ -127,7 +127,7 @@ async def submit_report(payload: ReportRequest):
             report_query = text("""
                 INSERT INTO url_reports (user_id, malicious_url, reason, status) 
                 VALUES (:user_id, :url, :reason, 'approved');
-            """)
+            """) 
             connection.execute(report_query, {
                 "user_id": user_id, 
                 "url": payload.malicious_url, 
