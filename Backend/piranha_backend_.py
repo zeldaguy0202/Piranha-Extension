@@ -1,15 +1,23 @@
 import asyncio
 import base64
+import html
+import logging
 import os
 import time
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import create_engine, text
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Chrome extension requests come from chrome-extension://<extension-id>.
 # Set CORS_ORIGINS to a comma-separated list, e.g. chrome-extension://abcd...
@@ -44,9 +52,60 @@ VIRUSTOTAL_POLL_TIMEOUT_SECONDS = 60
 VIRUSTOTAL_POLL_INTERVAL_SECONDS = 5
 
 REPORT_RECEIVED_MESSAGE = (
-    "Thank you for your report. We will notify you at a later date if the "
-    "site is approved for our list."
+    "Thank you for your report. If it is confirmed, we will email you at the "
+    "address you provided."
 )
+
+# Email is optional: without these, reports are still stored but no mail is sent.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "Piranha <onboarding@resend.dev>")
+RESEND_URL = "https://api.resend.com/emails"
+logger = logging.getLogger("piranha")
+
+
+def _defang(url: str) -> str:
+    # Keep the reported link from being clickable in the email.
+    return url.replace("http", "hxxp", 1).replace(".", "[.]")
+
+
+async def send_acceptance_email(user_id: int, name: str, email: str, url: str) -> None:
+    if not RESEND_API_KEY:
+        logger.warning("RESEND_API_KEY not set; skipping acceptance email")
+        return
+    body = (
+        f"<p>Hi {html.escape(name)},</p>"
+        "<p>Thank you for your report. We confirmed that the following site is "
+        "malicious and added it to the Piranha community blocklist:</p>"
+        f"<p><code>{html.escape(_defang(url))}</code></p>"
+        "<p>Do not visit this address. You received this email because this "
+        "address was entered in a Piranha report form.</p>"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                RESEND_URL,
+                headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+                json={
+                    "from": EMAIL_FROM,
+                    "to": [email],
+                    "subject": "Your Piranha report was accepted",
+                    "html": body,
+                },
+            )
+            response.raise_for_status()
+        with engine.connect() as connection:
+            connection.execute(
+                text("""
+                    UPDATE url_reports SET notified_at = now()
+                    WHERE user_id = :user_id AND malicious_url = :url
+                      AND notified_at IS NULL
+                """),
+                {"user_id": user_id, "url": url},
+            )
+            connection.commit()
+    except Exception:
+        # A failed email must never affect the report itself.
+        logger.exception("Failed to send acceptance email")
 
 
 def _url_to_virustotal_id(url: str) -> str:
@@ -98,13 +157,16 @@ async def is_flagged_malicious(url: str) -> bool:
 
 # Data validation model for incoming extension requests
 class ReportRequest(BaseModel):
-    name: str
+    name: str = Field(max_length=100)
     email: EmailStr
-    malicious_url: str
-    reason: str | None = None
+    malicious_url: str = Field(max_length=2048)
+    reason: str | None = Field(default=None, max_length=2000)
 
 @app.post("/api/report")
-async def submit_report(payload: ReportRequest):
+@limiter.limit("10/minute")
+async def submit_report(
+    request: Request, payload: ReportRequest, background_tasks: BackgroundTasks
+):
 
     # Only store reports VirusTotal confirms as malicious; everything else
     # still gets the same neutral acknowledgement below.
@@ -124,6 +186,17 @@ async def submit_report(payload: ReportRequest):
             user_id = result.fetchone()[0]
 
             # 2. Insert the Malicious URL Report, approved since VirusTotal flagged it
+            # Only the first report of a URL by a user triggers an email.
+            already_notified = connection.execute(
+                text("""
+                    SELECT 1 FROM url_reports
+                    WHERE user_id = :user_id AND malicious_url = :url
+                      AND notified_at IS NOT NULL
+                    LIMIT 1
+                """),
+                {"user_id": user_id, "url": payload.malicious_url},
+            ).fetchone() is not None
+
             report_query = text("""
                 INSERT INTO url_reports (user_id, malicious_url, reason, status) 
                 VALUES (:user_id, :url, :reason, 'approved');
@@ -136,6 +209,15 @@ async def submit_report(payload: ReportRequest):
             
             # Commit transaction to save changes
             connection.commit()
+
+        if not already_notified:
+            background_tasks.add_task(
+                send_acceptance_email,
+                user_id,
+                payload.name,
+                payload.email,
+                payload.malicious_url,
+            )
 
         return {"status": "received", "message": REPORT_RECEIVED_MESSAGE}
 

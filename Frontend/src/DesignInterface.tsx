@@ -325,6 +325,10 @@ export default function PiranhaPopup() {
                 />
               </label>
 
+              <p className="section-subtitle">
+                We only use your email to tell you if your report is accepted.
+              </p>
+
               {submitError && <p className="error-text">{submitError}</p>}
 
               <button type="submit" className="primary-button" disabled={submitting}>
@@ -338,8 +342,8 @@ export default function PiranhaPopup() {
             <CheckCircle2 className="success-icon" size={40} />
             <h3 className="section-title">Thank you for your report!</h3>
             <p className="section-subtitle">
-              We will notify you at a later date if the site is approved for
-              our list.
+              If your report is confirmed, we'll email you at the address you
+              provided.
             </p>
             <button type="button" onClick={resetForm}>
               Submit Another Report
