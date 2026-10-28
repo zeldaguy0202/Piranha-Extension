@@ -13,6 +13,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
@@ -64,7 +65,6 @@ logger = logging.getLogger("piranha")
 
 
 def _defang(url: str) -> str:
-    # Keep the reported link from being clickable in the email.
     return url.replace("http", "hxxp", 1).replace(".", "[.]")
 
 
@@ -220,8 +220,9 @@ async def submit_report(
 
         return {"status": "received", "message": REPORT_RECEIVED_MESSAGE}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except SQLAlchemyError:
+        logger.exception("Database error in submit_report")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/api/blocked-sites")
@@ -238,5 +239,6 @@ async def get_blocked_sites():
 
         return {"sites": sites}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except SQLAlchemyError:
+            logger.exception("Database error in get_blocked_sites")
+            raise HTTPException(status_code=500, detail="Internal server error")
