@@ -104,7 +104,6 @@ async def send_acceptance_email(user_id: int, name: str, email: str, url: str) -
             )
             connection.commit()
     except Exception:
-        # A failed email must never affect the report itself.
         logger.exception("Failed to send acceptance email")
 
 
