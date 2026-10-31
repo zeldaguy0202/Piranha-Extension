@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "daniel/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: Backend/requirements.txt
+      - run: pip install ruff bandit pip-audit
+      - name: Ruff (lint)
+        run: ruff check Backend --exclude Backend/.venv
+      - name: Bandit (security)
+        run: bandit -q -r Backend/piranha_backend_.py
+      - name: pip-audit (vulnerable dependencies)
+        run: pip-audit -r Backend/requirements.txt
+
+  frontend:
+    name: Frontend build and audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+      - run: npm ci
+      - name: Type-check and build
+        run: npm run build
+      - name: npm audit (advisory)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  docker:
+    name: Dockerfile lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Backend/Dockerfile
+      - run: docker build Backend
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
