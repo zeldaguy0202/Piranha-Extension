@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Chrome extension public key in the manifest is not a secret"
+condition = "AND"
+paths = ['''Frontend/src/manifest\.ts''']
+regexes = ['''key:\s*"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA''']
