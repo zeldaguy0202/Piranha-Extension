@@ -1,4 +1,6 @@
 const $ = (selector) => document.querySelector(selector);
+let recentThreats = [];
+let refreshTimer;
 
 async function request(path, options = {}) {
   const response = await fetch(path, {
@@ -24,6 +26,56 @@ function text(tag, value, className) {
   return node;
 }
 
+function showToast(message) {
+  const toast = $("#toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+  window.clearTimeout(toast.hideTimer);
+  toast.hideTimer = window.setTimeout(() => toast.classList.remove("visible"), 2600);
+}
+
+function animateNumber(node, target) {
+  const start = Number(node.textContent.replace(/,/g, "")) || 0;
+  const started = performance.now();
+  const duration = 500;
+  function frame(now) {
+    const progress = Math.min(1, (now - started) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    node.textContent = Math.round(start + (target - start) * eased).toLocaleString();
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function renderThreatRows() {
+  const rows = $("#threatRows");
+  const query = $("#threatFilter").value.trim().toLowerCase();
+  const filtered = recentThreats.filter((item) => `${item.url} ${item.sources.join(" ")}`.toLowerCase().includes(query));
+  rows.replaceChildren();
+  if (!filtered.length) {
+    const row = document.createElement("tr");
+    const message = recentThreats.length ? "No activity matches this filter." : "No confirmed provider matches have been cached yet.";
+    const cell = text("td", message, "empty");
+    cell.colSpan = 3;
+    row.append(cell);
+    rows.append(row);
+    return;
+  }
+  filtered.forEach((item) => {
+    const row = document.createElement("tr");
+    row.tabIndex = 0;
+    row.title = "Click to copy this URL";
+    row.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(item.url).catch(() => undefined);
+      showToast("URL copied to clipboard");
+    });
+    const url = text("td", item.url, "url-cell");
+    url.title = item.url;
+    row.append(url, text("td", item.sources.join(", ")), text("td", new Date(item.checked_at).toLocaleString()));
+    rows.append(row);
+  });
+}
+
 function renderScan(result) {
   const panel = $("#scanResult");
   panel.replaceChildren();
@@ -46,7 +98,9 @@ function renderScan(result) {
   panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-async function loadDashboard() {
+async function loadDashboard(showFeedback = false) {
+  const refresh = $("#refreshDashboard");
+  refresh.classList.add("loading");
   try {
     await request("/health");
     $("#apiHealth").className = "health online";
@@ -58,37 +112,27 @@ async function loadDashboard() {
 
   try {
     const stats = await request("/api/dashboard/stats");
-    $("#statThreats").textContent = stats.confirmed_provider_matches.toLocaleString();
-    $("#statIndicators").textContent = stats.trusted_indicators.toLocaleString();
-    $("#statReports").textContent = stats.reports.toLocaleString();
-    $("#statReporters").textContent = stats.reporters.toLocaleString();
-
-    const rows = $("#threatRows");
-    rows.replaceChildren();
-    if (!stats.recent_threats.length) {
-      const row = document.createElement("tr");
-      const cell = text("td", "No confirmed provider matches have been cached yet.", "empty");
-      cell.colSpan = 3;
-      row.append(cell);
-      rows.append(row);
-    } else {
-      stats.recent_threats.forEach((item) => {
-        const row = document.createElement("tr");
-        const url = text("td", item.url, "url-cell");
-        url.title = item.url;
-        row.append(url, text("td", item.sources.join(", ")), text("td", new Date(item.checked_at).toLocaleString()));
-        rows.append(row);
-      });
-    }
+    animateNumber($("#statThreats"), stats.confirmed_provider_matches);
+    animateNumber($("#statIndicators"), stats.trusted_indicators);
+    animateNumber($("#statReports"), stats.reports);
+    animateNumber($("#statReporters"), stats.reporters);
+    recentThreats = stats.recent_threats;
+    renderThreatRows();
+    $("#lastUpdated").textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`;
+    if (showFeedback) showToast("Dashboard data refreshed");
 
   } catch (_) {
     $("#threatRows").innerHTML = '<tr><td colspan="3" class="empty">Dashboard data is unavailable.</td></tr>';
+  } finally {
+    refresh.classList.remove("loading");
   }
 }
 
 $("#scanForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   setBusy(event.currentTarget, true, "Scanning…");
+  $("#scanProgress").classList.remove("hidden");
+  $("#scanResult").classList.add("hidden");
   try {
     renderScan(await request("/api/scan", { method: "POST", body: JSON.stringify({ url: $("#urlInput").value.trim() }) }));
     loadDashboard();
@@ -97,6 +141,7 @@ $("#scanForm").addEventListener("submit", async (event) => {
     panel.className = "result-panel malicious";
     panel.replaceChildren(text("strong", "Scan unavailable"), text("p", error.message));
   } finally {
+    $("#scanProgress").classList.add("hidden");
     setBusy(event.currentTarget, false);
   }
 });
@@ -177,6 +222,7 @@ $("#reportForm").addEventListener("submit", async (event) => {
     await request("/api/report", { method: "POST", body: JSON.stringify(payload) });
     output.className = "tool-result good";
     output.textContent = "Report accepted. It will remain unverified until corroborated.";
+    showToast("Community report saved");
     event.currentTarget.reset();
     loadDashboard();
   } catch (error) {
@@ -187,4 +233,29 @@ $("#reportForm").addEventListener("submit", async (event) => {
   }
 });
 
+document.querySelectorAll("[data-url-example]").forEach((button) => {
+  button.addEventListener("click", () => {
+    $("#urlInput").value = button.dataset.urlExample;
+    $("#urlInput").focus();
+  });
+});
+
+$("#threatFilter").addEventListener("input", renderThreatRows);
+$("#refreshDashboard").addEventListener("click", () => loadDashboard(true));
+
+const sections = document.querySelectorAll("main section[id]");
+const navLinks = document.querySelectorAll("nav a");
+const observer = new IntersectionObserver((entries) => {
+  const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+  if (!visible) return;
+  navLinks.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${visible.target.id}`));
+}, { rootMargin: "-25% 0px -60%", threshold: [0, .25, .5] });
+sections.forEach((section) => observer.observe(section));
+
 loadDashboard();
+refreshTimer = window.setInterval(() => {
+  if (!document.hidden) loadDashboard();
+}, 30000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) loadDashboard();
+});

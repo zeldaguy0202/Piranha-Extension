@@ -19,7 +19,10 @@
       <a href="#breach-tools">Breach Tools</a>
       <a href="#intelligence">Intelligence</a>
     </nav>
-    <span id="apiHealth" class="health"><i></i> Connecting</span>
+    <div class="live-status">
+      <span id="apiHealth" class="health"><i></i> Connecting</span>
+      <small id="lastUpdated">Waiting for data</small>
+    </div>
   </header>
 
   <main>
@@ -35,8 +38,18 @@
           <input id="urlInput" name="url" type="text" inputmode="url" placeholder="https://example.com" autocomplete="off" required>
           <button type="submit">Scan URL</button>
         </div>
+        <div class="quick-examples" aria-label="Example scans">
+          <span>Try:</span>
+          <button type="button" data-url-example="https://example.com">Known-safe example</button>
+          <button type="button" data-url-example="http://192.0.2.1/account/verify/login/password">Suspicious pattern</button>
+        </div>
         <p class="form-note">An unknown result means no strong evidence was found. It does not guarantee safety.</p>
       </form>
+    </section>
+
+    <section id="scanProgress" class="scan-progress hidden" aria-live="polite">
+      <div class="scanner-line"></div>
+      <span>Normalizing address</span><span>Checking community data</span><span>Querying threat intelligence</span><span>Calculating verdict</span>
     </section>
 
     <section id="scanResult" class="result-panel hidden" aria-live="polite"></section>
@@ -106,6 +119,10 @@
           <h2>Recent confirmed threats</h2>
           <p>Only positive provider matches are retained temporarily. Unknown browsing URLs are not stored.</p>
         </div>
+        <div class="table-controls">
+          <label class="search-control">Filter activity<input id="threatFilter" type="search" placeholder="URL or source"></label>
+          <button id="refreshDashboard" type="button" class="outline-button">Refresh data</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>URL</th><th>Source</th><th>Checked</th></tr></thead>
@@ -134,6 +151,8 @@
       </form>
     </section>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <footer>
     <strong>Piranha</strong>
