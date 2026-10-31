@@ -1,8 +1,15 @@
-const PIRANHA_DEFAULT_API = "http://127.0.0.1:8000";
+const PIRANHA_DEFAULT_API = "https://piranha-extension-production.up.railway.app";
 const PIRANHA_SCAN_TIMEOUT_MS = 7000;
 
 function getSettings() {
-  return new Promise((resolve) => chrome.storage.sync.get(["blockedSites", "apiUrl", "automaticScanning", "passwordDetection"], resolve));
+  return new Promise((resolve) => chrome.storage.sync.get(["blockedSites", "communityBlockedSites", "ignoredCommunitySites", "apiUrl", "automaticScanning", "passwordDetection"], (data) => {
+    const ignored = data.ignoredCommunitySites || [];
+    data.blockedSites = Array.from(new Set([
+      ...(data.blockedSites || []),
+      ...(data.communityBlockedSites || []).filter((site) => !ignored.includes(site)),
+    ]));
+    resolve(data);
+  }));
 }
 
 function setSettings(value) {

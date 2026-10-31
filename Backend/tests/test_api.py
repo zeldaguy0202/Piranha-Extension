@@ -40,6 +40,8 @@ def test_report_then_community_signal(client):
         assert response.status_code == 201
     scan = client.post("/api/scan", json={"url": "https://reported.example/bad"}).json()
     assert any(item["category"] == "community_reports" for item in scan["evidence"])
+    blocked = client.get("/api/blocked-sites").json()
+    assert blocked["sites"] == ["https://reported.example/bad"]
 
 
 def test_duplicate_report_from_same_user_is_updated_not_duplicated(client):

@@ -1,15 +1,18 @@
 from contextlib import asynccontextmanager
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from datetime import timedelta
 import asyncio
 import hashlib
 import hmac
+import html
 import ipaddress
+import logging
 import re
 from pathlib import Path
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,6 +36,10 @@ async def lifespan(_: FastAPI):
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
 DASHBOARD_DIR = Path(__file__).resolve().parents[2] / "Dashboard"
+REPORT_WINDOW_SECONDS = 60
+REPORT_LIMIT = 10
+report_attempts: dict[str, deque[float]] = defaultdict(deque)
+logger = logging.getLogger("piranha")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -48,6 +55,42 @@ def parsed_url(raw_url: str):
         return normalize_url(raw_url)
     except InvalidURL as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def enforce_report_limit(request: Request) -> None:
+    """Small deployment-safe guard for the public report form."""
+    import time
+
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    attempts = report_attempts[client]
+    while attempts and now - attempts[0] > REPORT_WINDOW_SECONDS:
+        attempts.popleft()
+    if len(attempts) >= REPORT_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many reports; try again in one minute")
+    attempts.append(now)
+
+
+async def send_report_receipt(name: str, email: str, url: str) -> None:
+    if not settings.resend_api_key:
+        return
+    safe_name = html.escape(name)
+    safe_url = html.escape(url.replace(".", "[.]").replace("http", "hxxp", 1))
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+                json={
+                    "from": settings.email_from,
+                    "to": [email],
+                    "subject": "Piranha received your report",
+                    "html": f"<p>Hi {safe_name},</p><p>Piranha received your report for <code>{safe_url}</code>. It will contribute to community protection after corroboration.</p>",
+                },
+            )
+            response.raise_for_status()
+    except httpx.HTTPError:
+        logger.exception("Unable to send report receipt")
 
 
 @app.get("/health")
@@ -167,7 +210,13 @@ async def scan_url(payload: URLScanRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/report", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
-def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
+def submit_report(
+    payload: ReportRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    enforce_report_limit(request)
     target = parsed_url(payload.malicious_url)
     email = str(payload.email).strip().lower()
     identity = hmac.new(settings.report_identity_secret.encode(), email.encode(), hashlib.sha256).hexdigest()
@@ -185,12 +234,26 @@ def submit_report(payload: ReportRequest, db: Session = Depends(get_db)):
     if existing:
         existing.reason = payload.reason or existing.reason
         db.commit()
+        background_tasks.add_task(send_report_receipt, payload.name.strip(), email, target.url)
         return ReportResponse(status="accepted", report_id=existing.id, normalized_url=target.url)
     report = URLReport(user_id=user.id, normalized_url=target.url, reason=payload.reason)
     db.add(report)
     db.commit()
     db.refresh(report)
+    background_tasks.add_task(send_report_receipt, payload.name.strip(), email, target.url)
     return ReportResponse(status="accepted", report_id=report.id, normalized_url=target.url)
+
+
+@app.get("/api/blocked-sites")
+def community_blocked_sites(db: Session = Depends(get_db)):
+    """Return corroborated community reports for extension background sync."""
+    rows = db.execute(
+        select(URLReport.normalized_url, func.count(func.distinct(URLReport.user_id)).label("reporters"))
+        .group_by(URLReport.normalized_url)
+        .having(func.count(func.distinct(URLReport.user_id)) >= 2)
+        .order_by(URLReport.normalized_url)
+    ).all()
+    return {"sites": [row.normalized_url for row in rows]}
 
 
 @app.get("/api/ip/{ip_address}", response_model=IPReputationResponse)

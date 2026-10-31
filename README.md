@@ -15,6 +15,9 @@ Piranha is a Tennessee State University senior project: a browser extension and 
 - VirusTotal URL-report and IP-address reputation lookups
 - Positive-only provider cache; clean and unknown browsing URLs are not stored
 - Persistent community reports, counted by distinct reporter and reused during scans
+- Five-minute community blocklist synchronization between Supabase and every extension
+- Railway-ready Docker deployment and a React/Vite Manifest V3 extension build
+- Public report rate limiting and optional Resend receipt emails
 - Reporter email fingerprinting; report email addresses are not stored directly
 - Optional Have I Been Pwned account-breach lookup
 - Automatic new-password screening through the free HIBP Pwned Passwords k-anonymity API
@@ -45,6 +48,7 @@ Run tests with `cd Backend && ../.venv/bin/python -m pytest -q`.
 - `POST /api/scan` with `{"url":"https://example.com"}` checks and explains a URL.
 - `POST /api/report` records a community report.
 - `GET /api/ip/{address}` checks an IPv4 or IPv6 address with VirusTotal.
+- `GET /api/blocked-sites` returns URLs corroborated by at least two distinct reporters.
 - `POST /api/indicators` adds a trusted URL/domain indicator and requires `X-Admin-Key`.
 - `GET /api/breaches/{email}` checks HIBP when `HIBP_API_KEY` is configured.
 - `GET /api/password/range/{prefix}` proxies the free padded HIBP password hash-range response. Chrome hashes passwords locally; plaintext passwords and complete hashes are never sent or stored.
@@ -73,6 +77,8 @@ Copy `Backend/.env.example` to `Backend/.env`. Never commit real secrets.
 - `GOOGLE_SAFE_BROWSING_API_KEY`: enables Google Safe Browsing URL checks
 - `VIRUSTOTAL_API_KEY`: enables existing VirusTotal URL-report checks; unknown URLs are not automatically submitted
 - `HIBP_API_KEY`: enables breached-account checks
+- `RESEND_API_KEY`: optional report-receipt email service key
+- `EMAIL_FROM`: verified Resend sender address
 - `CORS_ORIGINS`: comma-separated web development origins
 - `REQUEST_TIMEOUT_SECONDS`: outbound provider timeout
 - `POSITIVE_CACHE_HOURS`: maximum lifetime for confirmed provider matches; provider limits take precedence
@@ -81,7 +87,28 @@ The Supabase credential previously committed in this repository has been removed
 
 ## Browser extension
 
-Visit `chrome://extensions`, enable Developer mode, select **Load unpacked**, and choose the `Frontend` directory. Keep the backend running. The popup has two tabs: **URL Check** for URLs, IP reputation, reports, and personal blocking; and **Password Check** for HIBP password and email breach checks. Piranha also scans each ordinary HTTP or HTTPS page automatically at document start. Malicious and suspicious results display a full-page warning. If the API is unavailable, navigation fails open so the extension does not break normal browsing.
+Build the production extension first:
+
+```bash
+cd Frontend
+npm ci
+npm run build
+```
+
+Visit `chrome://extensions`, enable Developer mode, select **Load unpacked**, and choose `Frontend/dist`. The popup has two tabs: **URL Check** for URLs, IP reputation, reports, and personal/community blocking; and **Password Check** for HIBP password and email-breach demonstration checks. Piranha also scans HTTP and HTTPS pages automatically at document start. Malicious and suspicious results display a full-page warning. If the API is unavailable, navigation fails open so the extension does not break normal browsing.
+
+## Railway and Supabase deployment
+
+Create a Railway service with `Backend` as its root directory. The included Dockerfile starts `app.main:app` and Railway checks `/health`. Configure at minimum:
+
+```text
+DATABASE_URL=<Supabase PostgreSQL connection string>
+VIRUSTOTAL_API_KEY=<server-side key>
+REPORT_IDENTITY_SECRET=<long random secret>
+CORS_ORIGINS=https://piranha-extension-production.up.railway.app
+```
+
+Optional provider keys are documented in `Backend/.env.example`. Never place provider keys in extension source. After Railway deploys, confirm `/health`, `/docs`, and `/api/dashboard/stats`, then rebuild the extension if its public Railway URL changes.
 
 See [Open_Source_Threat_Tools.md](Open_Source_Threat_Tools.md) for the recommended detection stack, limitations, and phased integration plan.
 

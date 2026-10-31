@@ -7,3 +7,5 @@ __pycache__/
 .coverage*
 htmlcov/
 *.db
+Frontend/node_modules/
+Frontend/dist/

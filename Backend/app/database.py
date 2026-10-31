@@ -56,11 +56,14 @@ class ExternalThreatCache(Base):
 
 
 settings = get_settings()
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+database_url = settings.database_url
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
 engine_options = {"connect_args": connect_args, "pool_pre_ping": True}
-if settings.database_url in {"sqlite://", "sqlite:///:memory:"}:
+if database_url in {"sqlite://", "sqlite:///:memory:"}:
     engine_options["poolclass"] = StaticPool
-engine = create_engine(settings.database_url, **engine_options)
+engine = create_engine(database_url, **engine_options)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

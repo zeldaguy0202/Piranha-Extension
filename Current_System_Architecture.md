@@ -1,34 +1,29 @@
+# Piranha End-to-End Architecture and Data Flow
+
 ```mermaid
-  graph TD
-      %% User Interface Layer
-      subgraph Client ["Client Layer (Browser)"]
-          UI["React.js Popup UI<br/>(Vite Bundled)"]
-          CS["content.js<br/>(DOM Blocker)"]
-      end
-  
-      %% Storage & REST API Communication
-      CS <-->|"chrome.storage.sync"| UI
-      UI -->|"HTTP POST (JSON)<br/>REST API"| API
-  
-      %% Application Layer
-      subgraph Backend ["Backend Layer (GCP Target)"]
-          API["FastAPI App<br/>(Python + Pydantic)"]
-          ORM["SQLAlchemy ORM"]
-          API --> ORM
-      end
-  
-      %% Database Layer
-      subgraph Data ["Database Layer"]
-          DB[(PostgreSQL Database<br/>Supabase)]
-          ORM <-->|"SQL Queries / Connection"| DB
-      end
-  
-      %% Custom Styling
-      classDef client fill:#1e1e1e,stroke:#ff3e3e,stroke-width:2px,color:#fff;
-      classDef backend fill:#1e1e1e,stroke:#00aaff,stroke-width:2px,color:#fff;
-      classDef data fill:#1e1e1e,stroke:#00e676,stroke-width:2px,color:#fff;
+flowchart LR
+    U[Chrome user] --> P[React extension popup]
+    U --> C[Content script]
+    P <--> S[chrome.storage.sync]
+    C <--> S
+    B[Background worker] <--> S
+    P -->|HTTPS REST| API[FastAPI on Railway]
+    C -->|Automatic URL and password checks| API
+    B -->|Community list every 5 minutes| API
+    API --> H[Heuristics and local indicators]
+    API --> VT[VirusTotal URL and IP API]
+    API --> HP[HIBP Pwned Passwords]
+    API --> OSINT[PhishTank / URLhaus / ThreatFox / Safe Browsing]
+    API <--> DB[(Supabase PostgreSQL)]
+    API -. optional receipt .-> E[Resend]
+    API --> D[Security dashboard]
 ```
 
-    class UI,CS client;
-    class API,ORM backend;
-    class DB data;
+## Main flows
+
+1. **Automatic URL protection:** the content script sends the current URL to Railway. FastAPI combines heuristics, Supabase indicators and reports, cached positive results, and external threat providers. It returns a verdict and evidence; the extension displays a blocking warning for malicious or suspicious results.
+2. **Password protection:** Chrome hashes the password locally with SHA-1 and sends only the first five hash characters. The backend requests the padded HIBP range; Chrome matches the remaining suffix locally. Plaintext passwords and complete hashes are never transmitted or stored.
+3. **Community reporting:** a report is normalized, rate-limited, and stored in Supabase. The email is converted to a keyed fingerprint before storage. Two distinct reporter fingerprints make the URL available from `/api/blocked-sites`.
+4. **Shared protection:** the extension background worker downloads the corroborated community list every five minutes and combines it with the user's personal list in `chrome.storage.sync`.
+5. **Threat cache:** only positive external matches are cached in Supabase. Unknown browsing URLs are not retained as threat-cache records.
+6. **Dashboard:** the Railway root page reads aggregate report, reporter, indicator, and cached-threat data without exposing reporter identities.

@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     admin_api_key: str | None = None
     report_identity_secret: str = "piranha-local-development"
+    resend_api_key: str | None = None
+    email_from: str = "Piranha <onboarding@resend.dev>"
     urlhaus_auth_key: str | None = None
     phishtank_enabled: bool = True
     phishtank_api_key: str | None = None

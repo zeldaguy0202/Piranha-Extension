@@ -10,11 +10,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.database import Base, engine
-from app.main import app
+from app.main import app, report_attempts
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
+    report_attempts.clear()
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)
