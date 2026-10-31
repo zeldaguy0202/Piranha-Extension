@@ -48,7 +48,7 @@ Run tests with `cd Backend && ../.venv/bin/python -m pytest -q`.
 - `POST /api/scan` with `{"url":"https://example.com"}` checks and explains a URL.
 - `POST /api/report` records a community report.
 - `GET /api/ip/{address}` checks an IPv4 or IPv6 address with VirusTotal.
-- `GET /api/blocked-sites` returns URLs corroborated by at least two distinct reporters.
+- `GET /api/blocked-sites` returns URLs confirmed by trusted evidence or corroborated by at least four distinct reporters.
 - `POST /api/indicators` adds a trusted URL/domain indicator and requires `X-Admin-Key`.
 - `GET /api/breaches/{email}` checks HIBP when `HIBP_API_KEY` is configured.
 - `GET /api/password/range/{prefix}` proxies the free padded HIBP password hash-range response. Chrome hashes passwords locally; plaintext passwords and complete hashes are never sent or stored.
@@ -82,6 +82,8 @@ Copy `Backend/.env.example` to `Backend/.env`. Never commit real secrets.
 - `CORS_ORIGINS`: comma-separated web development origins
 - `REQUEST_TIMEOUT_SECONDS`: outbound provider timeout
 - `POSITIVE_CACHE_HOURS`: maximum lifetime for confirmed provider matches; provider limits take precedence
+- `COMMUNITY_WARNING_REPORTS`: distinct reports required to show community evidence
+- `COMMUNITY_BLOCK_REPORTS`: distinct reports required for shared blocking
 
 The Supabase credential previously committed in this repository has been removed from current source. The database owner must rotate that password because it remains exposed in Git history.
 

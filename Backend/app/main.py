@@ -164,7 +164,7 @@ async def scan_url(payload: URLScanRequest, db: Session = Depends(get_db)):
         evidence.append({"source": indicator.source, "category": indicator.threat_type, "detail": f"Matched a locally stored {indicator.indicator_type} threat indicator.", "score": indicator.confidence})
 
     reporter_count = db.scalar(select(func.count(func.distinct(URLReport.user_id))).where(URLReport.normalized_url == target.url)) or 0
-    if reporter_count >= 2:
+    if reporter_count >= settings.community_warning_reports:
         evidence.append({"source": "Piranha community", "category": "community_reports", "detail": f"Reported by {reporter_count} distinct community members; reports are not independently verified.", "score": min(50, 15 + reporter_count * 5)})
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -246,14 +246,29 @@ def submit_report(
 
 @app.get("/api/blocked-sites")
 def community_blocked_sites(db: Session = Depends(get_db)):
-    """Return corroborated community reports for extension background sync."""
+    """Return strongly corroborated or independently confirmed threats."""
     rows = db.execute(
         select(URLReport.normalized_url, func.count(func.distinct(URLReport.user_id)).label("reporters"))
         .group_by(URLReport.normalized_url)
-        .having(func.count(func.distinct(URLReport.user_id)) >= 2)
+        .having(func.count(func.distinct(URLReport.user_id)) >= settings.community_block_reports)
         .order_by(URLReport.normalized_url)
     ).all()
-    return {"sites": [row.normalized_url for row in rows]}
+    sites = {row.normalized_url for row in rows}
+
+    indicators = db.scalars(select(ThreatIndicator).where(ThreatIndicator.confidence >= 80)).all()
+    sites.update(item.value for item in indicators)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    cached = db.scalars(select(ExternalThreatCache).where(ExternalThreatCache.expires_at > now)).all()
+    for item in cached:
+        confirmed = any(
+            evidence.get("score", 0) >= 80
+            and evidence.get("category") in {"known_malware_url", "malware", "phishing"}
+            for evidence in item.evidence
+        )
+        if confirmed:
+            sites.add(item.normalized_url)
+    return {"sites": sorted(sites)}
 
 
 @app.get("/api/ip/{ip_address}", response_model=IPReputationResponse)

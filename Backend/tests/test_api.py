@@ -40,8 +40,12 @@ def test_report_then_community_signal(client):
         assert response.status_code == 201
     scan = client.post("/api/scan", json={"url": "https://reported.example/bad"}).json()
     assert any(item["category"] == "community_reports" for item in scan["evidence"])
-    blocked = client.get("/api/blocked-sites").json()
-    assert blocked["sites"] == ["https://reported.example/bad"]
+    assert client.get("/api/blocked-sites").json()["sites"] == []
+
+    for index in range(2, 4):
+        response = client.post("/api/report", json={"name": f"Reporter {index}", "email": f"person{index}@example.com", "malicious_url": "https://reported.example/bad", "reason": "Suspicious login prompt"})
+        assert response.status_code == 201
+    assert client.get("/api/blocked-sites").json()["sites"] == ["https://reported.example/bad"]
 
 
 def test_duplicate_report_from_same_user_is_updated_not_duplicated(client):
@@ -86,6 +90,7 @@ def test_confirmed_live_match_is_cached_but_unknown_is_not(client, monkeypatch):
     assert second["verdict"] == "malicious"
     assert calls["phishtank"] == 1
     assert any(item.get("detail", "").startswith("Confirmed match loaded") for item in second["providers"])
+    assert client.get("/api/blocked-sites").json()["sites"] == ["https://confirmed.example/login"]
 
 
 def test_password_range_returns_only_hash_suffixes(client, monkeypatch):

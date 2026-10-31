@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     hibp_api_key: str | None = None
     request_timeout_seconds: float = 5.0
     positive_cache_hours: int = 24
+    community_warning_reports: int = 2
+    community_block_reports: int = 4
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[1] / ".env",
