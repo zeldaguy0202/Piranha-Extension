@@ -21,10 +21,55 @@
 body {
   background-color: var(--bg-dark);
   color: var(--text-main);
-  min-width: 350px;
+  width: 390px;
+  max-height: 600px;
+  overflow-y: auto;
   padding: 20px;
   border-radius: 12px; /* Extensions usually clip body borders, but good for testing */
 }
+
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+header .status-dot { margin-left: auto; }
+header img { width: 52px; height: 52px; object-fit: contain; }
+h1 { font-size: 1.5rem; }
+header p, .url-text, .providers, .message { color: var(--text-sub); font-size: .82rem; }
+.card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.card h2 { font-size: 1rem; margin-bottom: 10px; }
+.section-title { display: flex; justify-content: space-between; align-items: center; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: #777; }
+.status-dot.online { background: #31c48d; }
+.status-dot.offline { background: var(--accent-red); }
+.url-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 10px; }
+.form-stack { display: flex; flex-direction: column; gap: 9px; }
+textarea { min-height: 68px; resize: vertical; padding: 10px; background: var(--bg-dark); color: white; border: 1px solid var(--border-color); border-radius: 8px; }
+.secondary { background: #343434; }
+.secondary:hover { background: #484848; }
+.result { margin-top: 10px; padding: 10px; border-radius: 8px; font-size: .82rem; border: 1px solid; }
+.result.unknown { border-color: #5581a7; background: #172534; }
+.result.suspicious { border-color: #e3a008; background: #33280c; }
+.result.malicious, .result.error { border-color: var(--accent-red); background: #321414; }
+.result h3 { font-size: .9rem; margin-bottom: 6px; }
+.evidence { margin: 6px 0; }
+.evidence li { display: block; padding: 6px; font-size: .78rem; }
+.hidden { display: none; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px; padding: 4px; background: #1e1e1e; border-radius: 10px; }
+.tab { margin: 0; padding: 10px; background: transparent; color: var(--text-sub); }
+.tab:hover { transform: none; background: #292929; }
+.tab.active { background: var(--accent-red); color: white; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.card > input { margin-bottom: 9px; }
+.privacy-note { color: var(--text-sub); font-size: .8rem; line-height: 1.45; margin-bottom: 10px; }
+.result p { line-height: 1.45; }
+.result button:disabled, button:disabled { opacity: .65; cursor: wait; transform: none; }
+.card summary { cursor: pointer; font-weight: 700; }
+.card[open] summary { margin-bottom: 10px; }
+.settings { color: var(--text-sub); }
+.settings summary { cursor: pointer; margin-bottom: 8px; }
+.settings label { display: block; font-size: .8rem; margin-bottom: 5px; }
+.settings .toggle { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
+.settings .toggle input { width: auto; }
+.settings button { margin-top: 8px; }
 
 h3 {
   font-weight: 700;
@@ -72,7 +117,7 @@ li:hover {
 input {
   width: 100%;
   padding: 12px 16px;
-  background: var(--bg-card);
+  background: var(--bg-dark);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   color: white;
@@ -108,7 +153,7 @@ button:active {
 }
 
 /* Secondary/Remove Button */
-#removeSite {
+.remove-site {
   background-color: transparent;
   color: var(--text-sub);
   border: 1px solid var(--border-color);
@@ -118,8 +163,10 @@ button:active {
   margin: 0;
 }
 
-#removeSite:hover {
+.remove-site:hover {
   background-color: #f44336;
   color: white;
   border-color: #f44336;
 }
+
+li.empty { color: var(--text-sub); justify-content: center; }

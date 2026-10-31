@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Website Blocker",
-  "description": "Blocks specified websites.",
-  "version": "1.0",
+  "name": "Piranha Link Guard",
+  "description": "Checks links for malicious indicators and manages a personal block list.",
+  "version": "1.2.0",
   "host_permissions": ["*://*/*"],
   "permissions": ["storage", "tabs"],
   "action": {
@@ -12,7 +12,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_start"
     }
   ]
 }

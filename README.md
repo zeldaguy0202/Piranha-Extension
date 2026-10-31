@@ -1,56 +1,90 @@
-# Piranha-Extension
-This open-source extension will allow users to block websites and report them to a community blacklist.
-This project was developed by seniors in the computer science department at Tennessee State University for their senior project.
-Below you will find the appropriate steps to begin running the extension and its backend locally on your computer. This current
-architecture will change as soon as we designate a cloud server for the python backend code to run on. For testing purposes, the below 
-advice should help you to get started. At the current moment, we do not have the frontend connected to the backend just yet. 
+# Piranha Extension
 
-#Setting up/Testing the Backend
-//
-To setup the backend of the extension, perform the following steps: 
-1. Download the piranha_backend_.py file from within the Backend folder. (You can also just download the whole repository if that makes it easier.)
-2. Open the Python file within a code editor such as VSCode.
-3. Create a new terminal in VSCode and run the command "python -m uvicorn PiranhaPythonBackend:app --reload"
-   Note: Make sure you are in the same directory as the file or you may get an error. To change directories, type in cd into the terminal window followed by
-   the folder you are trying to access which contains the python file.
-4. After, running the command, click on the local IP address that is created and make sure to add "/docs" at the end.
-5. You are now ready to test the backend! From your web browser, you can send test JSON data to the python script. Just click on the "/api/report" tab and then
-   the "Try it out" button. You should be given a JSON template which you can play around with and send to the python script. By testing this feature, you can see
-   how data is passed from the frontend to the backend, how the Python backend responds with HTTP status codes, and how the data is populated on the database side. 
-//
+Piranha is a Tennessee State University senior project: a browser extension and Python API for checking links against threat intelligence, explaining suspicious URL characteristics, blocking sites, and collecting community reports.
 
-#Setting up/Testing the Frontend
-//
-To setup the extension in your chrome browser, perform the following steps:
-1. Download or clone the code from this repository to a local directory on your computer. (*For this portion, you will only need the code from the "Frontend" folder of
-   the repository.) 
-3. Go to Google Chrome and enter "chrome://extensions/" into the URL or click the puzzle piece on the top-right toolbar.
-4. Toggle the switch to turn developer mode on in the top right of the page.
-5. Select "Load Unpacked" on the left.
-6. Select the directory you saved/cloned the repository to.
-7. Remember to enable the extension by toggle the switch 
-8. You should be ready to use the extension! Happy Reporting!
-//
+> A scanner cannot prove that a URL is safe. Piranha returns **malicious**, **suspicious**, or **unknown** and includes the evidence and provider status behind the result.
 
-#Additional Links for Access: 
-//
-Since this is a full stack project, their are a few different interconnected parts which flow into each other. Additionally, it's helpful to have links to any tools/resources/and or 
-documentation we have for development. Below are some great resources if you need help.
+## What is implemented
 
-Frontend: 
-Chrome Extensions Docs: https://developer.chrome.com/docs/extensions
+- FastAPI backend with interactive OpenAPI documentation
+- URL validation and canonical normalization
+- Explainable URL heuristics (IP hosts, punycode, shorteners, deep subdomains, phishing terms, and excessive length)
+- Local URL/domain threat-indicator database
+- Optional URLhaus malware-URL lookup
+- Live PhishTank, ThreatFox, and Google Safe Browsing lookups when enabled or configured
+- VirusTotal URL-report and IP-address reputation lookups
+- Positive-only provider cache; clean and unknown browsing URLs are not stored
+- Persistent community reports, counted by distinct reporter and reused during scans
+- Reporter email fingerprinting; report email addresses are not stored directly
+- Optional Have I Been Pwned account-breach lookup
+- Automatic new-password screening through the free HIBP Pwned Passwords k-anonymity API
+- SQLite locally and PostgreSQL/Supabase through `DATABASE_URL`
+- Protected indicator-administration endpoint
+- Automated API tests
 
-Backend: 
-FastAPI Documentation: https://fastapi.tiangolo.com/
-SQLAlchemy Documentation: https://docs.sqlalchemy.org/en/20/
-Pydantic Documentation: https://pydantic.dev/docs/validation/latest/get-started/
+## Run the backend
 
-Database: 
-Supabase (PostgreSQL Database): https://supabase.com/docs
-//
+Python 3.11 or newer is recommended.
 
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r Backend/requirements-dev.txt
+cp Backend/.env.example Backend/.env
+uvicorn app.main:app --app-dir Backend --reload
+```
 
-Note: This extension uses code from the a GitHub Repo by IAmTomShaw. Here is the link to the repo -> https://github.com/IAmTomShaw/Website-Blocker-Chrome-Extension.git. 
-Please check out the original code as well and his tutorial on youtube (https://www.youtube.com/watch?v=wZcU07zfMSk). Thanks!
+Open <http://127.0.0.1:8000/docs>. The default local database is `piranha.db`. Set `DATABASE_URL` in `Backend/.env` to use PostgreSQL.
 
+The Piranha Security Portal is available at <http://127.0.0.1:8000/>. It provides URL and IP scanning, password and email breach tools, community reporting, aggregate statistics, and recent confirmed threat matches without exposing reporter emails.
 
+Run tests with `cd Backend && ../.venv/bin/python -m pytest -q`.
+
+## Main API routes
+
+- `POST /api/scan` with `{"url":"https://example.com"}` checks and explains a URL.
+- `POST /api/report` records a community report.
+- `GET /api/ip/{address}` checks an IPv4 or IPv6 address with VirusTotal.
+- `POST /api/indicators` adds a trusted URL/domain indicator and requires `X-Admin-Key`.
+- `GET /api/breaches/{email}` checks HIBP when `HIBP_API_KEY` is configured.
+- `GET /api/password/range/{prefix}` proxies the free padded HIBP password hash-range response. Chrome hashes passwords locally; plaintext passwords and complete hashes are never sent or stored.
+- `GET /health` supports service health checks.
+
+The scan response's `providers` field tells the client which sources were checked, unavailable, or not configured. `unknown` means no strong evidence was found with the available sources; it does not mean safe.
+
+To import a downloaded PhishTank JSON or CSV feed, run:
+
+```bash
+cd Backend
+../.venv/bin/python -m scripts.import_phishtank /path/to/phishtank-feed.json
+```
+
+## Configuration
+
+Copy `Backend/.env.example` to `Backend/.env`. Never commit real secrets.
+
+- `DATABASE_URL`: SQLite or PostgreSQL SQLAlchemy URL
+- `ADMIN_API_KEY`: protects threat-indicator writes
+- `REPORT_IDENTITY_SECRET`: fingerprints reporter emails before database storage
+- `URLHAUS_AUTH_KEY`: enables URLhaus malware URL checks
+- `PHISHTANK_ENABLED`: enables limited unauthenticated PhishTank live checks
+- `PHISHTANK_API_KEY`: optional free application key for higher PhishTank limits
+- `THREATFOX_AUTH_KEY`: enables ThreatFox domain and IOC checks
+- `GOOGLE_SAFE_BROWSING_API_KEY`: enables Google Safe Browsing URL checks
+- `VIRUSTOTAL_API_KEY`: enables existing VirusTotal URL-report checks; unknown URLs are not automatically submitted
+- `HIBP_API_KEY`: enables breached-account checks
+- `CORS_ORIGINS`: comma-separated web development origins
+- `REQUEST_TIMEOUT_SECONDS`: outbound provider timeout
+- `POSITIVE_CACHE_HOURS`: maximum lifetime for confirmed provider matches; provider limits take precedence
+
+The Supabase credential previously committed in this repository has been removed from current source. The database owner must rotate that password because it remains exposed in Git history.
+
+## Browser extension
+
+Visit `chrome://extensions`, enable Developer mode, select **Load unpacked**, and choose the `Frontend` directory. Keep the backend running. The popup has two tabs: **URL Check** for URLs, IP reputation, reports, and personal blocking; and **Password Check** for HIBP password and email breach checks. Piranha also scans each ordinary HTTP or HTTPS page automatically at document start. Malicious and suspicious results display a full-page warning. If the API is unavailable, navigation fails open so the extension does not break normal browsing.
+
+See [Open_Source_Threat_Tools.md](Open_Source_Threat_Tools.md) for the recommended detection stack, limitations, and phased integration plan.
+
+## License and attribution
+
+See [LICENSE](LICENSE). The extension began from ideas/code credited to [IAmTomShaw's Website Blocker Chrome Extension](https://github.com/IAmTomShaw/Website-Blocker-Chrome-Extension). External feeds and APIs have separate licenses, terms, rate limits, and attribution requirements.
