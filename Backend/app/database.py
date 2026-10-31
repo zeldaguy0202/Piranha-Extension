@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import hashlib
 import hmac
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -67,7 +67,44 @@ engine = create_engine(database_url, **engine_options)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def migrate_legacy_postgres_schema() -> None:
+    """Add the normalized columns used by v2 without deleting teammate data."""
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as connection:
+        tables = set(inspect(connection).get_table_names())
+        if "users" in tables:
+            columns = {item["name"] for item in inspect(connection).get_columns("users")}
+            if "id" not in columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN id BIGSERIAL"))
+                if "user_id" in columns:
+                    connection.execute(text("UPDATE users SET id = user_id"))
+                    connection.execute(text("SELECT setval(pg_get_serial_sequence('users', 'user_id'), COALESCE((SELECT MAX(user_id) FROM users), 0) + 1, false)"))
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_id ON users (id)"))
+                connection.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE((SELECT MAX(id) FROM users), 0) + 1, false)"))
+        if "url_reports" in tables:
+            columns = {item["name"] for item in inspect(connection).get_columns("url_reports")}
+            if "id" not in columns:
+                connection.execute(text("ALTER TABLE url_reports ADD COLUMN id BIGSERIAL"))
+                if "report_id" in columns:
+                    connection.execute(text("UPDATE url_reports SET id = report_id"))
+                connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_url_reports_id ON url_reports (id)"))
+                connection.execute(text("SELECT setval(pg_get_serial_sequence('url_reports', 'id'), COALESCE((SELECT MAX(id) FROM url_reports), 0) + 1, false)"))
+            if "normalized_url" not in columns:
+                connection.execute(text("ALTER TABLE url_reports ADD COLUMN normalized_url TEXT"))
+                if "malicious_url" in columns:
+                    connection.execute(text("UPDATE url_reports SET normalized_url = malicious_url WHERE normalized_url IS NULL"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_url_reports_normalized_url ON url_reports (normalized_url)"))
+            if "malicious_url" in columns:
+                connection.execute(text("ALTER TABLE url_reports ALTER COLUMN malicious_url DROP NOT NULL"))
+            if "status" in columns:
+                connection.execute(text("ALTER TABLE url_reports ALTER COLUMN status SET DEFAULT 'pending'"))
+            if "created_at" not in columns:
+                connection.execute(text("ALTER TABLE url_reports ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT now()"))
+
+
 def create_tables() -> None:
+    migrate_legacy_postgres_schema()
     Base.metadata.create_all(engine)
     # Upgrade older local databases by replacing previously stored addresses.
     with Session(engine) as db:

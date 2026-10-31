@@ -35,7 +35,7 @@ async def lifespan(_: FastAPI):
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
-DASHBOARD_DIR = Path(__file__).resolve().parents[2] / "Dashboard"
+DASHBOARD_DIR = Path(__file__).resolve().parents[1] / "Dashboard"
 REPORT_WINDOW_SECONDS = 60
 REPORT_LIMIT = 10
 report_attempts: dict[str, deque[float]] = defaultdict(deque)
