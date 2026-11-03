@@ -6,3 +6,7 @@ description = "Chrome extension public key in the manifest is not a secret"
 condition = "AND"
 paths = ['''Frontend/src/manifest\.ts''']
 regexes = ['''key:\s*"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA''']
+
+[[allowlists]]
+description = "Environment example contains names and empty placeholders, never credentials"
+paths = ['''Backend/\.env\.example''']

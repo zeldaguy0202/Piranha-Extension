@@ -1,9 +1,26 @@
-from datetime import datetime, timezone
 import hashlib
 import hmac
+from datetime import UTC, datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, create_engine, inspect, text
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    inspect,
+    text,
+)
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 from sqlalchemy.pool import StaticPool
 
 from .config import get_settings
@@ -28,7 +45,7 @@ class URLReport(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     normalized_url: Mapped[str] = mapped_column(Text, index=True)
     reason: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     user: Mapped[User] = relationship(back_populates="reports")
 
 
@@ -40,7 +57,7 @@ class ThreatIndicator(Base):
     source: Mapped[str] = mapped_column(String(80))
     threat_type: Mapped[str] = mapped_column(String(80), default="malicious")
     confidence: Mapped[int] = mapped_column(Integer, default=90)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
 class ExternalThreatCache(Base):

@@ -1,6 +1,6 @@
 fastapi>=0.115,<1
 httpx>=0.27,<1
-pyscopg[binary]>=3.2,<4
+psycopg[binary]>=3.2,<4
 pydantic-settings>=2.6,<3
 pydantic[email]>=2.9,<3
 slowapi>=0.1.9,<1
