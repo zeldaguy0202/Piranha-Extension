@@ -1,7 +1,3 @@
-from contextlib import asynccontextmanager
-from collections import defaultdict, deque
-from datetime import datetime, timezone
-from datetime import timedelta
 import asyncio
 import hashlib
 import hmac
@@ -9,10 +5,21 @@ import html
 import ipaddress
 import logging
 import re
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,9 +28,35 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .database import ExternalThreatCache, ThreatIndicator, URLReport, User, create_tables, get_db
-from .providers import check_google_safe_browsing, check_hibp, check_phishtank, check_threatfox, check_urlhaus, check_virustotal, check_virustotal_ip, get_pwned_password_range
-from .schemas import HIBPBreach, HIBPResponse, IPReputationResponse, IndicatorRequest, PasswordRangeResponse, ReportRequest, ReportResponse, URLScanRequest, URLScanResponse
+from .database import (
+    ExternalThreatCache,
+    ThreatIndicator,
+    URLReport,
+    User,
+    create_tables,
+    get_db,
+)
+from .providers import (
+    check_google_safe_browsing,
+    check_hibp,
+    check_phishtank,
+    check_threatfox,
+    check_urlhaus,
+    check_virustotal,
+    check_virustotal_ip,
+    get_pwned_password_range,
+)
+from .schemas import (
+    HIBPBreach,
+    HIBPResponse,
+    IndicatorRequest,
+    IPReputationResponse,
+    PasswordRangeResponse,
+    ReportRequest,
+    ReportResponse,
+    URLScanRequest,
+    URLScanResponse,
+)
 from .url_analysis import InvalidURL, heuristic_evidence, normalize_url
 
 
@@ -104,7 +137,7 @@ def dashboard_home():
 
 
 @app.get("/api/dashboard/stats")
-def dashboard_stats(db: Session = Depends(get_db)):
+def dashboard_stats(db: Session = Depends(get_db)):  # noqa: B008 - FastAPI dependency injection
     reports = db.scalar(select(func.count()).select_from(URLReport)) or 0
     indicators = db.scalar(select(func.count()).select_from(ThreatIndicator)) or 0
     cached_threats = db.scalar(select(func.count()).select_from(ExternalThreatCache)) or 0
@@ -153,7 +186,7 @@ input{width:100%;box-sizing:border-box;padding:12px;border:1px solid #aaa;border
 
 
 @app.post("/api/scan", response_model=URLScanResponse)
-async def scan_url(payload: URLScanRequest, db: Session = Depends(get_db)):
+async def scan_url(payload: URLScanRequest, db: Session = Depends(get_db)):  # noqa: B008 - FastAPI dependency injection
     target = parsed_url(payload.url)
     evidence = heuristic_evidence(target)
     indicators = db.scalars(select(ThreatIndicator).where(or_(
@@ -167,7 +200,7 @@ async def scan_url(payload: URLScanRequest, db: Session = Depends(get_db)):
     if reporter_count >= settings.community_warning_reports:
         evidence.append({"source": "Piranha community", "category": "community_reports", "detail": f"Reported by {reporter_count} distinct community members; reports are not independently verified.", "score": min(50, 15 + reporter_count * 5)})
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     cached = db.scalar(select(ExternalThreatCache).where(
         ExternalThreatCache.normalized_url == target.url,
         ExternalThreatCache.expires_at > now,
@@ -206,7 +239,7 @@ async def scan_url(payload: URLScanRequest, db: Session = Depends(get_db)):
     score = min(100, sum(item["score"] for item in evidence))
     known_match = any(item["category"] in {"known_malware_url", "malware", "phishing"} and item["score"] >= 80 for item in evidence)
     verdict = "malicious" if known_match else "suspicious" if score >= 35 else "unknown"
-    return URLScanResponse(original_url=payload.url, normalized_url=target.url, hostname=target.hostname, verdict=verdict, risk_score=score, evidence=evidence, providers=provider_statuses, checked_at=datetime.now(timezone.utc))
+    return URLScanResponse(original_url=payload.url, normalized_url=target.url, hostname=target.hostname, verdict=verdict, risk_score=score, evidence=evidence, providers=provider_statuses, checked_at=datetime.now(UTC))
 
 
 @app.post("/api/report", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
@@ -214,7 +247,7 @@ def submit_report(
     payload: ReportRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db),  # noqa: B008 - FastAPI dependency injection
 ):
     enforce_report_limit(request)
     target = parsed_url(payload.malicious_url)
@@ -245,7 +278,7 @@ def submit_report(
 
 
 @app.get("/api/blocked-sites")
-def community_blocked_sites(db: Session = Depends(get_db)):
+def community_blocked_sites(db: Session = Depends(get_db)):  # noqa: B008 - FastAPI dependency injection
     """Return strongly corroborated or independently confirmed threats."""
     rows = db.execute(
         select(URLReport.normalized_url, func.count(func.distinct(URLReport.user_id)).label("reporters"))
@@ -258,7 +291,7 @@ def community_blocked_sites(db: Session = Depends(get_db)):
     indicators = db.scalars(select(ThreatIndicator).where(ThreatIndicator.confidence >= 80)).all()
     sites.update(item.value for item in indicators)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     cached = db.scalars(select(ExternalThreatCache).where(ExternalThreatCache.expires_at > now)).all()
     for item in cached:
         confirmed = any(
@@ -295,12 +328,12 @@ async def ip_reputation(ip_address: str):
         country=result.get("country"),
         network=result.get("network"),
         owner=result.get("owner"),
-        checked_at=datetime.now(timezone.utc),
+        checked_at=datetime.now(UTC),
     )
 
 
 @app.post("/api/indicators", status_code=status.HTTP_201_CREATED)
-def add_indicator(payload: IndicatorRequest, x_admin_key: str | None = Header(default=None), db: Session = Depends(get_db)):
+def add_indicator(payload: IndicatorRequest, x_admin_key: str | None = Header(default=None), db: Session = Depends(get_db)):  # noqa: B008 - FastAPI dependency injection
     if not settings.admin_api_key:
         raise HTTPException(status_code=503, detail="Indicator administration is disabled")
     if not x_admin_key or not hmac.compare_digest(x_admin_key, settings.admin_api_key):

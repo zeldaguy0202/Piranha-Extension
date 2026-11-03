@@ -1,9 +1,8 @@
 import json
 
-from sqlalchemy import func, select
-
 from app.database import SessionLocal, ThreatIndicator
 from scripts.import_phishtank import import_feed
+from sqlalchemy import func, select
 
 
 def test_imports_only_verified_online_urls(tmp_path):

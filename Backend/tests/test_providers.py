@@ -1,6 +1,5 @@
 import httpx
 import pytest
-
 from app.config import Settings
 from app.providers import check_virustotal
 

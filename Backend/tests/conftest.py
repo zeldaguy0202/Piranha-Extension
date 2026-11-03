@@ -7,10 +7,9 @@ os.environ["VIRUSTOTAL_API_KEY"] = ""
 os.environ["PHISHTANK_ENABLED"] = "false"
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.database import Base, engine
 from app.main import app, report_attempts
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)

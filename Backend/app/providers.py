@@ -1,5 +1,5 @@
-from urllib.parse import quote
 import base64
+from urllib.parse import quote
 
 import httpx
 

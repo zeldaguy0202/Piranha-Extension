@@ -8,10 +8,9 @@ import csv
 import json
 from pathlib import Path
 
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
 from app.database import SessionLocal, ThreatIndicator, create_tables
 from app.url_analysis import InvalidURL, normalize_url
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 
 def rows_from(path: Path):
