@@ -1,362 +1,160 @@
-import React, { useEffect, useState } from "react";
-import { Send, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import logo from "../ChatGPT Image Sep 2, 2026 at 07_04_27 PM.png";
 import { normalizeHost } from "./lib/normalizeHost";
 import { API_BASE_URL } from "./config";
 
-const REPORT_API_URL = `${API_BASE_URL}/api/report`;
-const BLOCKED_SITES_API_URL = `${API_BASE_URL}/api/blocked-sites`;
+type TabKey = "url" | "password";
+type ResultState = { tone: "good" | "warn" | "bad"; title: string; detail: string } | null;
 
-type TabKey = "blocklist" | "report";
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.detail || `Request failed (${response.status})`);
+  return body as T;
+}
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "blocklist", label: "Blocked Sites" },
-  { key: "report", label: "Report" },
-];
+async function sha1Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+}
+
+function Result({ value }: { value: ResultState }) {
+  if (!value) return null;
+  const Icon = value.tone === "good" ? CheckCircle2 : AlertTriangle;
+  return <div className={`result ${value.tone}`}><Icon size={18} /><div><strong>{value.title}</strong><p>{value.detail}</p></div></div>;
+}
 
 export default function PiranhaPopup() {
-  const [activeTab, setActiveTab] = useState<TabKey>("blocklist");
-  const [blockedSites, setBlockedSites] = useState<string[]>([]);
-  const [communityBlockedSites, setCommunityBlockedSites] = useState<string[]>([]);
-  const [ignoredCommunitySites, setIgnoredCommunitySites] = useState<string[]>([]);
-  const [siteInput, setSiteInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [blockError, setBlockError] = useState("");
-
-  const [name, setName] = useState("");
+  const [tab, setTab] = useState<TabKey>("url");
+  const [online, setOnline] = useState<boolean | null>(null);
+  const [currentUrl, setCurrentUrl] = useState("");
   const [url, setUrl] = useState("");
-  const [reason, setReason] = useState("");
-  const [details, setDetails] = useState("");
+  const [urlResult, setUrlResult] = useState<ResultState>(null);
+  const [ip, setIp] = useState("");
+  const [ipResult, setIpResult] = useState<ResultState>(null);
+  const [busy, setBusy] = useState("");
+  const [blockedSites, setBlockedSites] = useState<string[]>([]);
+  const [communitySites, setCommunitySites] = useState<string[]>([]);
+  const [ignoredSites, setIgnoredSites] = useState<string[]>([]);
+  const [siteInput, setSiteInput] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  const [reason, setReason] = useState("");
+  const [reportResult, setReportResult] = useState<ResultState>(null);
+  const [password, setPassword] = useState("");
+  const [passwordResult, setPasswordResult] = useState<ResultState>(null);
+  const [breachEmail, setBreachEmail] = useState("");
+  const [emailResult, setEmailResult] = useState<ResultState>(null);
 
-  const effectiveBlockedSites = Array.from(
-    new Set([
-      ...blockedSites,
-      ...communityBlockedSites.filter((site) => !ignoredCommunitySites.includes(site)),
-    ])
-  );
-  const filteredBlockedSites = effectiveBlockedSites.filter((site) =>
-    site.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+  const effectiveBlocked = useMemo(() => Array.from(new Set([
+    ...blockedSites,
+    ...communitySites.filter((site) => !ignoredSites.includes(site)),
+  ])).sort(), [blockedSites, communitySites, ignoredSites]);
 
   useEffect(() => {
-    chrome.storage.sync.get(
-      ["blockedSites", "communityBlockedSites", "ignoredCommunitySites"],
-      (data) => {
-      setBlockedSites(data.blockedSites || []);
-      setCommunityBlockedSites(data.communityBlockedSites || []);
-      setIgnoredCommunitySites(data.ignoredCommunitySites || []);
-      }
-    );
-
-    fetch(BLOCKED_SITES_API_URL)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { sites?: string[] } | null) => {
-        if (!data) return;
-        const hostnames = Array.from(
-          new Set((data.sites || []).map(normalizeHost).filter(Boolean))
-        );
-        chrome.storage.sync.set({ communityBlockedSites: hostnames });
-      })
-      .catch(() => undefined);
-
-    const onChanged = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
-    ) => {
-      if (areaName !== "sync") return;
-      if (changes.blockedSites) {
-        setBlockedSites((changes.blockedSites.newValue as string[]) || []);
-      }
-      if (changes.communityBlockedSites) {
-        setCommunityBlockedSites((changes.communityBlockedSites.newValue as string[]) || []);
-      }
-      if (changes.ignoredCommunitySites) {
-        setIgnoredCommunitySites((changes.ignoredCommunitySites.newValue as string[]) || []);
-      }
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    return () => chrome.storage.onChanged.removeListener(onChanged);
+    chrome.tabs.query({ active: true, currentWindow: true }, ([active]) => {
+      const activeUrl = active?.url?.startsWith("http") ? active.url : "";
+      setCurrentUrl(activeUrl); setUrl(activeUrl);
+    });
+    chrome.storage.sync.get(["blockedSites", "communityBlockedSites", "ignoredCommunitySites", "reportName", "reportEmail"], (data) => {
+      setBlockedSites(data.blockedSites || []); setCommunitySites(data.communityBlockedSites || []);
+      setIgnoredSites(data.ignoredCommunitySites || []); setName(data.reportName || ""); setEmail(data.reportEmail || "");
+    });
+    api<{ status: string }>("/health").then(() => setOnline(true)).catch(() => setOnline(false));
+    api<{ sites: string[] }>("/api/blocked-sites").then((data) => {
+      const sites = Array.from(new Set(data.sites.map(normalizeHost).filter(Boolean)));
+      setCommunitySites(sites); chrome.storage.sync.set({ communityBlockedSites: sites });
+    }).catch(() => undefined);
   }, []);
 
-  const addSite = (rawHost: string) => {
-    const host = normalizeHost(rawHost);
-    if (!host) {
-      setBlockError("Enter a valid site to block.");
-      return;
-    }
-    chrome.storage.sync.get(
-      ["blockedSites", "communityBlockedSites", "ignoredCommunitySites"],
-      (data) => {
-      const sites: string[] = data.blockedSites || [];
-      const communitySites: string[] = data.communityBlockedSites || [];
-      const ignoredSites: string[] = data.ignoredCommunitySites || [];
-      const alreadyBlocked =
-        (sites.includes(host) || communitySites.includes(host)) &&
-        !ignoredSites.includes(host);
-      if (alreadyBlocked) {
-        setBlockError(`${host} is already blocked.`);
-        return;
-      }
-      const updatedSites = sites.includes(host) ? sites : [...sites, host];
-      const updatedIgnoredSites = ignoredSites.filter((site) => site !== host);
-      chrome.storage.sync.set(
-        { blockedSites: updatedSites, ignoredCommunitySites: updatedIgnoredSites },
-        () => {
-        setBlockedSites(updatedSites);
-        setIgnoredCommunitySites(updatedIgnoredSites);
-        setBlockError("");
-        }
-      );
-      }
-    );
+  const saveLists = (local: string[], ignored: string[]) => {
+    setBlockedSites(local); setIgnoredSites(ignored);
+    chrome.storage.sync.set({ blockedSites: local, ignoredCommunitySites: ignored });
   };
 
-  const handleAddSite = () => {
-    addSite(siteInput);
+  const addBlocked = (raw: string) => {
+    const host = normalizeHost(raw);
+    if (!host) return;
+    saveLists(Array.from(new Set([...blockedSites, host])), ignoredSites.filter((item) => item !== host));
     setSiteInput("");
   };
 
-  const handleBlockCurrentSite = () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const activeUrl = tabs[0]?.url;
-      if (!activeUrl || !activeUrl.startsWith("http")) {
-        setBlockError("This page can't be blocked.");
-        return;
-      }
-      addSite(activeUrl);
-    });
+  const removeBlocked = (host: string) => {
+    saveLists(blockedSites.filter((item) => item !== host), communitySites.includes(host) ? Array.from(new Set([...ignoredSites, host])) : ignoredSites);
   };
 
-  const removeSite = (site: string) => {
-    const updatedSites = blockedSites.filter((entry) => entry !== site);
-    const updatedIgnoredSites = communityBlockedSites.includes(site)
-      ? Array.from(new Set([...ignoredCommunitySites, site]))
-      : ignoredCommunitySites;
-    chrome.storage.sync.set(
-      { blockedSites: updatedSites, ignoredCommunitySites: updatedIgnoredSites },
-      () => {
-        setBlockedSites(updatedSites);
-        setIgnoredCommunitySites(updatedIgnoredSites);
-      }
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitError("");
-
-    if (!name || !url || !reason || !details || !email) {
-      setSubmitError("Please fill out all fields.");
-      return;
-    }
-
-    setSubmitting(true);
+  const scanUrl = async () => {
+    if (!url.trim()) return;
+    setBusy("url"); setUrlResult(null);
     try {
-      const response = await fetch(REPORT_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          email,
-          malicious_url: url,
-          reason: `${reason}: ${details}`,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.detail || "Report submission failed.");
-      }
-
-      setSubmitted(true);
-    } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Report submission failed."
-      );
-    } finally {
-      setSubmitting(false);
-    }
+      const result = await api<any>("/api/scan", { method: "POST", body: JSON.stringify({ url: url.trim() }) });
+      const evidence = result.evidence?.length ? result.evidence.map((item: any) => `${item.source}: ${item.detail}`).join(" ") : "No known malicious signals were found.";
+      setUrlResult({ tone: result.verdict === "malicious" ? "bad" : result.verdict === "suspicious" ? "warn" : "good", title: `${result.verdict.toUpperCase()} · ${result.risk_score}/100`, detail: evidence });
+    } catch (error) { setUrlResult({ tone: "bad", title: "Scan failed", detail: (error as Error).message }); }
+    finally { setBusy(""); }
   };
 
-  const resetForm = () => {
-    setSubmitted(false);
-    setName("");
-    setUrl("");
-    setReason("");
-    setDetails("");
-    setEmail("");
-    setSubmitError("");
+  const scanIp = async () => {
+    setBusy("ip"); setIpResult(null);
+    try {
+      const result = await api<any>(`/api/ip/${encodeURIComponent(ip.trim())}`);
+      setIpResult({ tone: result.verdict === "malicious" ? "bad" : result.verdict === "suspicious" ? "warn" : "good", title: `${result.verdict.toUpperCase()} · ${result.risk_score}/100`, detail: `VirusTotal found ${result.malicious_detections} malicious and ${result.suspicious_detections} suspicious detections.` });
+    } catch (error) { setIpResult({ tone: "bad", title: "IP check failed", detail: (error as Error).message }); }
+    finally { setBusy(""); }
   };
 
-  return (
-    <div className="popup">
-      <img src={logo} className="logo" alt="Piranha logo" />
+  const reportUrl = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy("report"); setReportResult(null);
+    try {
+      await api("/api/report", { method: "POST", body: JSON.stringify({ name, email, malicious_url: url, reason: reason || null }) });
+      chrome.storage.sync.set({ reportName: name, reportEmail: email });
+      setReportResult({ tone: "good", title: "Report saved", detail: "Your report is now part of Piranha community intelligence." }); setReason("");
+    } catch (error) { setReportResult({ tone: "bad", title: "Report failed", detail: (error as Error).message }); }
+    finally { setBusy(""); }
+  };
 
-      <div className="tab-bar" role="group" aria-label="Popup sections">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className="tab-button"
-            aria-pressed={activeTab === tab.key}
-            data-active={activeTab === tab.key}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+  const checkPassword = async () => {
+    if (!password) return; setBusy("password"); setPasswordResult(null);
+    try {
+      const hash = await sha1Hex(password); setPassword("");
+      const result = await api<any>(`/api/password/range/${hash.slice(0, 5)}`);
+      const count = Number(result.matches[hash.slice(5)] || 0);
+      setPasswordResult({ tone: count ? "bad" : "good", title: count ? "Breached password" : "No breach found", detail: count ? `Found ${count.toLocaleString()} times in HIBP. Do not use this password.` : "Not found in HIBP. Still use a unique password and MFA." });
+    } catch (error) { setPasswordResult({ tone: "bad", title: "Password check failed", detail: (error as Error).message }); }
+    finally { setBusy(""); }
+  };
 
-      {activeTab === "blocklist" && (
-      <section className="card">
-        <h3 className="section-title">Blocked Websites</h3>
+  const checkEmail = async () => {
+    setBusy("email"); setEmailResult(null);
+    try {
+      const result = await api<any>(`/api/breaches/${encodeURIComponent(breachEmail.trim())}`);
+      setEmailResult({ tone: result.breached ? "bad" : "good", title: result.breached ? "Breaches found" : "No breach found", detail: result.breached ? result.breaches.map((item: any) => item.title).join(", ") : "No breach was returned for this test address." });
+    } catch (error) { setEmailResult({ tone: "bad", title: "Email check failed", detail: (error as Error).message }); }
+    finally { setBusy(""); }
+  };
 
-        <input
-          type="search"
-          className="blocklist-search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search blocked sites"
-          aria-label="Search blocked sites"
-        />
+  return <div className="popup">
+    <header><img src={logo} className="logo" alt="Piranha logo" /><div><h1>Piranha</h1><p>Proactive browser protection</p></div><span className={`health ${online ? "online" : online === false ? "offline" : ""}`} title="Backend status" /></header>
+    <nav className="tab-bar" aria-label="Security tools">
+      <button className={tab === "url" ? "active" : ""} onClick={() => setTab("url")}>URL Check</button>
+      <button className={tab === "password" ? "active" : ""} onClick={() => setTab("password")}>Password Check</button>
+    </nav>
 
-        <ul className="blocked-list">
-          {effectiveBlockedSites.length === 0 && (
-            <li className="blocked-empty">No sites blocked yet.</li>
-          )}
-          {effectiveBlockedSites.length > 0 && filteredBlockedSites.length === 0 && (
-            <li className="blocked-empty">No matching sites found.</li>
-          )}
-          {filteredBlockedSites.map((site) => (
-            <li key={site} className="blocked-item">
-              <span>{site}</span>
-              <button
-                type="button"
-                className="remove-button"
-                onClick={() => removeSite(site)}
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+    {tab === "url" && <div className="panel-stack">
+      <section className="card"><h2><ShieldCheck size={18} /> Check a URL</h2><p className="muted ellipsis">{currentUrl || "Enter a website address"}</p><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" /><button onClick={scanUrl} disabled={busy === "url"}>{busy === "url" ? "Scanning…" : "Scan URL"}</button><Result value={urlResult} /></section>
+      <section className="card compact"><h2>VirusTotal IP reputation</h2><div className="row"><input value={ip} onChange={(e) => setIp(e.target.value)} placeholder="8.8.8.8" /><button onClick={scanIp} disabled={busy === "ip"}>Check</button></div><Result value={ipResult} /></section>
+      <details className="card"><summary>Personal & community blocklist ({effectiveBlocked.length})</summary><ul className="blocked-list">{effectiveBlocked.map((site) => <li key={site}><span>{site}</span><button onClick={() => removeBlocked(site)}>Remove</button></li>)}</ul><div className="row"><input value={siteInput} onChange={(e) => setSiteInput(e.target.value)} placeholder="example.com" /><button onClick={() => addBlocked(siteInput)}>Add</button></div><button className="secondary" onClick={() => addBlocked(currentUrl)}>Block current site</button></details>
+      <details className="card"><summary>Report this URL</summary><form onSubmit={reportUrl} className="form-stack"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" required /><textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this URL suspicious?" /><button disabled={busy === "report"}>{busy === "report" ? "Submitting…" : "Submit report"}</button></form><Result value={reportResult} /></details>
+    </div>}
 
-        <div className="add-site-form">
-          <input
-            type="text"
-            value={siteInput}
-            onChange={(e) => setSiteInput(e.target.value)}
-            placeholder="e.g. example.com"
-          />
-          <button type="button" onClick={handleAddSite}>
-            Add Site
-          </button>
-          <button type="button" onClick={handleBlockCurrentSite}>
-            Block Current Site
-          </button>
-          {blockError && <p className="error-text">{blockError}</p>}
-        </div>
-      </section>
-      )}
-
-      {activeTab === "report" && (
-      <section className="card">
-        {!submitted ? (
-          <>
-            <h3 className="section-title">Report a Website</h3>
-            <p className="section-subtitle">
-              Tell the Piranha community what you found.
-            </p>
-
-            <form onSubmit={handleSubmit} className="report-form">
-              <label>
-                Your name
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jane Doe"
-                />
-              </label>
-
-              <label>
-                Website URL
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://example.com"
-                />
-              </label>
-
-              <label>
-                Why should this website be blocked?
-                <select value={reason} onChange={(e) => setReason(e.target.value)}>
-                  <option value="">Select a reason</option>
-                  <option value="Phishing">Phishing</option>
-                  <option value="Malware">Malware</option>
-                  <option value="Scam">Scam or Fraud</option>
-                  <option value="Suspicious">Suspicious Website</option>
-                  <option value="Fake Website">Fake Website</option>
-                  <option value="Other">Other</option>
-                </select>
-              </label>
-
-              <label>
-                Details
-                <textarea
-                  value={details}
-                  onChange={(e) => setDetails(e.target.value)}
-                  placeholder="Describe what made this website suspicious..."
-                  rows={3}
-                />
-              </label>
-
-              <label>
-                Email address
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                />
-              </label>
-
-              <p className="section-subtitle">
-                We only use your email to tell you if your report is accepted.
-              </p>
-
-              {submitError && <p className="error-text">{submitError}</p>}
-
-              <button type="submit" className="primary-button" disabled={submitting}>
-                <Send size={16} />
-                {submitting ? "Submitting..." : "Submit Report"}
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="success">
-            <CheckCircle2 className="success-icon" size={40} />
-            <h3 className="section-title">Thank you for your report!</h3>
-            <p className="section-subtitle">
-              If your report is confirmed, we'll email you at the address you
-              provided.
-            </p>
-            <button type="button" onClick={resetForm}>
-              Submit Another Report
-            </button>
-          </div>
-        )}
-      </section>
-      )}
-
-      <p className="privacy-note">
-        🔒 Your information is handled securely and used only to improve
-        community protection.
-      </p>
-    </div>
-  );
+    {tab === "password" && <div className="panel-stack">
+      <section className="card"><h2>Password breach check</h2><p className="muted">Your password never leaves Chrome. Only five SHA-1 hash characters are sent using HIBP k-anonymity.</p><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter a password" /><button onClick={checkPassword} disabled={busy === "password"}>{busy === "password" ? "Checking…" : "Check password"}</button><Result value={passwordResult} /></section>
+      <section className="card"><h2>Email breach demo</h2><p className="muted">Uses HIBP's official integration-test service.</p><input type="email" value={breachEmail} onChange={(e) => setBreachEmail(e.target.value)} placeholder="account-exists@hibp-integration-tests.com" /><button onClick={checkEmail} disabled={busy === "email"}>{busy === "email" ? "Checking…" : "Check test email"}</button><Result value={emailResult} /></section>
+    </div>}
+    <footer>Results are security signals, not guarantees.</footer>
+  </div>;
 }

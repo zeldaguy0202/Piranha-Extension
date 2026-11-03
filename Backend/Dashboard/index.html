@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Piranha threat intelligence and breach-checking dashboard">
+  <title>Piranha Security Portal</title>
+  <link rel="stylesheet" href="/dashboard/styles.css">
+  <script src="/dashboard/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Piranha home">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span><strong>Piranha</strong><small>Security Portal</small></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="#scan">URL Scanner</a>
+      <a href="#breach-tools">Breach Tools</a>
+      <a href="#intelligence">Intelligence</a>
+    </nav>
+    <div class="live-status">
+      <span id="apiHealth" class="health"><i></i> Connecting</span>
+      <small id="lastUpdated">Waiting for data</small>
+    </div>
+  </header>
+
+  <main>
+    <section id="scan" class="scan-panel">
+      <div class="scan-copy">
+        <p class="eyebrow">Multi-source threat intelligence</p>
+        <h1>Check a link before you trust it</h1>
+        <p>Piranha compares URLs with live security providers, trusted indicators, community reports, and explainable warning signals.</p>
+      </div>
+      <form id="scanForm" class="scan-form">
+        <label for="urlInput">Website address</label>
+        <div class="input-action">
+          <input id="urlInput" name="url" type="text" inputmode="url" placeholder="https://example.com" autocomplete="off" required>
+          <button type="submit">Scan URL</button>
+        </div>
+        <div class="quick-examples" aria-label="Example scans">
+          <span>Try:</span>
+          <button type="button" data-url-example="https://example.com">Known-safe example</button>
+          <button type="button" data-url-example="http://192.0.2.1/account/verify/login/password">Suspicious pattern</button>
+        </div>
+        <p class="form-note">An unknown result means no strong evidence was found. It does not guarantee safety.</p>
+      </form>
+    </section>
+
+    <section id="scanProgress" class="scan-progress hidden" aria-live="polite">
+      <div class="scanner-line"></div>
+      <span>Normalizing address</span><span>Checking community data</span><span>Querying threat intelligence</span><span>Calculating verdict</span>
+    </section>
+
+    <section id="scanResult" class="result-panel hidden" aria-live="polite"></section>
+
+    <section class="metrics" aria-label="Piranha statistics">
+      <article><span id="statThreats">—</span><p>Confirmed provider matches</p></article>
+      <article><span id="statIndicators">—</span><p>Trusted indicators</p></article>
+      <article><span id="statReports">—</span><p>Community reports</p></article>
+      <article><span id="statReporters">—</span><p>Distinct reporters</p></article>
+    </section>
+
+    <section id="breach-tools" class="section-block">
+      <div class="section-heading">
+        <p class="eyebrow">Privacy-conscious checks</p>
+        <h2>Breach tools</h2>
+        <p>Check compromised passwords without transmitting the password, search an email for known breaches, or inspect an IP address with VirusTotal.</p>
+      </div>
+      <div class="tool-grid">
+        <article class="tool-card">
+          <div class="tool-icon password-icon" aria-hidden="true">•••</div>
+          <h3>Pwned password check</h3>
+          <p>Your browser hashes the password. Only five hash characters are sent using HIBP k-anonymity.</p>
+          <form id="passwordForm">
+            <label for="passwordInput">Password to check</label>
+            <div class="input-action compact">
+              <input id="passwordInput" type="password" autocomplete="new-password" required>
+              <button type="submit">Check</button>
+            </div>
+          </form>
+          <div id="passwordResult" class="tool-result" aria-live="polite"></div>
+        </article>
+
+        <article class="tool-card">
+          <div class="tool-icon email-icon" aria-hidden="true">@</div>
+          <h3>Email breach demo</h3>
+          <p>Uses HIBP's test service. Try account-exists@hibp-integration-tests.com.</p>
+          <form id="emailForm">
+            <label for="emailInput">Email address</label>
+            <div class="input-action compact">
+              <input id="emailInput" type="email" autocomplete="email" placeholder="account-exists@hibp-integration-tests.com" required>
+              <button type="submit">Check demo</button>
+            </div>
+          </form>
+          <div id="emailResult" class="tool-result" aria-live="polite"></div>
+        </article>
+
+        <article class="tool-card">
+          <div class="tool-icon" aria-hidden="true">IP</div>
+          <h3>IP reputation</h3>
+          <p>Check an IPv4 or IPv6 address against VirusTotal security detections.</p>
+          <form id="ipForm">
+            <label for="ipInput">IP address</label>
+            <div class="input-action compact">
+              <input id="ipInput" type="text" placeholder="8.8.8.8" required>
+              <button type="submit">Check</button>
+            </div>
+          </form>
+          <div id="ipResult" class="tool-result" aria-live="polite"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="intelligence" class="section-block intelligence-grid">
+      <div>
+        <div class="section-heading left">
+          <p class="eyebrow">Local intelligence</p>
+          <h2>Recent confirmed threats</h2>
+          <p>Only positive provider matches are retained temporarily. Unknown browsing URLs are not stored.</p>
+        </div>
+        <div class="table-controls">
+          <label class="search-control">Filter activity<input id="threatFilter" type="search" placeholder="URL or source"></label>
+          <button id="refreshDashboard" type="button" class="outline-button">Refresh data</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>URL</th><th>Source</th><th>Checked</th></tr></thead>
+            <tbody id="threatRows"><tr><td colspan="3" class="empty">Loading intelligence…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <section class="section-block report-panel">
+      <div>
+        <p class="eyebrow">Community intelligence</p>
+        <h2>Report a suspicious link</h2>
+        <p>Reports remain unverified until corroborated by other users or reviewed against trusted evidence.</p>
+      </div>
+      <form id="reportForm" class="report-form">
+        <div class="field-row">
+          <label>Name<input name="name" maxlength="120" required></label>
+          <label>Email<input name="email" type="email" maxlength="320" required></label>
+        </div>
+        <label>Suspicious URL<input name="malicious_url" type="url" required></label>
+        <label>Reason<textarea name="reason" maxlength="2000" rows="3" placeholder="What did you notice?"></textarea></label>
+        <button type="submit">Submit report</button>
+        <div id="reportResult" class="tool-result" aria-live="polite"></div>
+      </form>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <footer>
+    <strong>Piranha</strong>
+    <span>Senior Project at Tennessee State University</span>
+    <span>Results are security signals, not guarantees.</span>
+  </footer>
+</body>
+</html>

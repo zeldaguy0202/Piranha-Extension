@@ -23,7 +23,7 @@ jobs:
       - name: Ruff (lint)
         run: ruff check Backend --exclude Backend/.venv
       - name: Bandit (security)
-        run: bandit -q -r Backend/piranha_backend_.py
+        run: bandit -q -r Backend/app Backend/piranha_backend_.py
       - name: pip-audit (vulnerable dependencies)
         run: pip-audit -r Backend/requirements.txt
 
